@@ -16,6 +16,7 @@ export default function Record({ session, setPage }) {
   const [videoFile, setVideoFile] = useState(null)
   const [videoPreview, setVideoPreview] = useState(null)
   const [videoError, setVideoError] = useState('')
+  const [videoReading, setVideoReading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
 
@@ -32,16 +33,24 @@ export default function Record({ session, setPage }) {
     const file = e.target.files[0]
     if (!file) return
     setVideoError('')
+    setVideoFile(null)
     if (file.size > 50 * 1024 * 1024) {
       setVideoError('動画が50MBを超えています。短く撮り直すか、短い動画にしてください。')
       return
     }
-    // iOS Safari対策: 選択直後にBlobとして読み込む
     const preview = URL.createObjectURL(file)
     setVideoPreview(preview)
-    const buffer = await file.arrayBuffer()
-    const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
-    setVideoFile({ blob, name: file.name, size: file.size, type: file.type || 'video/mp4' })
+    setVideoReading(true)
+    try {
+      const buffer = await file.arrayBuffer()
+      const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
+      setVideoFile({ blob, name: file.name, size: file.size, type: file.type || 'video/mp4' })
+    } catch (err) {
+      setVideoError('動画の読み込みに失敗しました。もう一度お試しください。')
+      setVideoPreview(null)
+    } finally {
+      setVideoReading(false)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -211,14 +220,17 @@ export default function Record({ session, setPage }) {
               <input type="file" accept="video/*" onChange={handleVideoChange} className="hidden" />
             </label>
           )}
+          {videoReading && (
+            <p className="text-sm text-blue-500 bg-blue-50 rounded-lg px-3 py-2 mt-2">動画を読み込み中... しばらくお待ちください</p>
+          )}
           {videoError && (
             <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 mt-2">{videoError}</p>
           )}
         </div>
 
-        <button type="submit" disabled={loading}
+        <button type="submit" disabled={loading || videoReading}
           className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-2xl text-lg transition-colors disabled:opacity-50">
-          {loading ? (videoFile ? '動画アップロード中...' : '保存中...') : '記録を保存する ⚾'}
+          {videoReading ? '動画準備中...' : loading ? (videoFile ? '動画アップロード中...' : '保存中...') : '記録を保存する ⚾'}
         </button>
       </form>
     </div>

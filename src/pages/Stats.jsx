@@ -17,6 +17,7 @@ function EditModal({ record, session, onClose, onSave }) {
   const [videoFile, setVideoFile] = useState(null)
   const [videoPreview, setVideoPreview] = useState(record.video_url || null)
   const [videoError, setVideoError] = useState('')
+  const [videoReading, setVideoReading] = useState(false)
   const [saving, setSaving] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -143,14 +144,23 @@ function EditModal({ record, session, onClose, onSave }) {
                 const file = e.target.files[0]
                 if (!file) return
                 setVideoError('')
+                setVideoFile(null)
                 if (file.size > 50 * 1024 * 1024) {
                   setVideoError('動画が50MBを超えています。短い動画にしてください。')
                   return
                 }
                 setVideoPreview(URL.createObjectURL(file))
-                const buffer = await file.arrayBuffer()
-                const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
-                setVideoFile({ blob, name: file.name, size: file.size, type: file.type || 'video/mp4' })
+                setVideoReading(true)
+                try {
+                  const buffer = await file.arrayBuffer()
+                  const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
+                  setVideoFile({ blob, name: file.name, size: file.size, type: file.type || 'video/mp4' })
+                } catch (err) {
+                  setVideoError('動画の読み込みに失敗しました。もう一度お試しください。')
+                  setVideoPreview(null)
+                } finally {
+                  setVideoReading(false)
+                }
               }}
             />
             {videoPreview ? (
@@ -174,14 +184,17 @@ function EditModal({ record, session, onClose, onSave }) {
                 <span className="text-xs text-gray-400 mt-0.5">50MB以内</span>
               </button>
             )}
+            {videoReading && (
+              <p className="text-sm text-blue-500 bg-blue-50 rounded-lg px-3 py-2 mt-2">動画を読み込み中... しばらくお待ちください</p>
+            )}
             {videoError && (
               <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 mt-2">{videoError}</p>
             )}
           </div>
         </div>
-        <button onClick={handleSave} disabled={saving}
+        <button onClick={handleSave} disabled={saving || videoReading}
           className="w-full mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
-          {saving ? '保存中...' : '保存する'}
+          {videoReading ? '動画準備中...' : saving ? '保存中...' : '保存する'}
         </button>
       </div>
     </div>
