@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../supabase'
 
@@ -18,6 +18,7 @@ function EditModal({ record, session, onClose, onSave }) {
   const [videoPreview, setVideoPreview] = useState(record.video_url || null)
   const [videoError, setVideoError] = useState('')
   const [saving, setSaving] = useState(false)
+  const fileInputRef = useRef(null)
 
   const set = (key, value) => setForm(f => ({ ...f, [key]: value }))
 
@@ -133,29 +134,43 @@ function EditModal({ record, session, onClose, onSave }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">フォーム動画</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files[0]
+                if (!file) return
+                setVideoError('')
+                if (file.size > 50 * 1024 * 1024) {
+                  setVideoError('動画が50MBを超えています。短い動画にしてください。')
+                  return
+                }
+                setVideoFile(file)
+                setVideoPreview(URL.createObjectURL(file))
+              }}
+            />
             {videoPreview ? (
               <div className="space-y-2">
                 <video src={videoPreview} controls playsInline className="w-full rounded-lg max-h-40 bg-black" />
-                <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoError('') }}
-                  className="text-sm text-red-400 hover:text-red-600">動画を削除</button>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    className="text-sm text-blue-500 hover:text-blue-700">動画を変更</button>
+                  <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoError('') }}
+                    className="text-sm text-red-400 hover:text-red-600">動画を削除</button>
+                </div>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-4 cursor-pointer hover:border-green-400 transition-colors">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-4 hover:border-green-400 transition-colors bg-transparent"
+              >
                 <span className="text-2xl mb-1">🎥</span>
                 <span className="text-sm text-gray-500">タップして動画を選択</span>
                 <span className="text-xs text-gray-400 mt-0.5">50MB以内</span>
-                <input type="file" accept="video/*" onChange={e => {
-                  const file = e.target.files[0]
-                  if (!file) return
-                  setVideoError('')
-                  if (file.size > 50 * 1024 * 1024) {
-                    setVideoError('動画が50MBを超えています。短い動画にしてください。')
-                    return
-                  }
-                  setVideoFile(file)
-                  setVideoPreview(URL.createObjectURL(file))
-                }} className="hidden" />
-              </label>
+              </button>
             )}
             {videoError && (
               <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 mt-2">{videoError}</p>
