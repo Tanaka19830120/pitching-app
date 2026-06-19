@@ -14,8 +14,7 @@ export default function Record({ session, setPage }) {
     pitch_types: [],
     memo: '',
   })
-  const [videoFile, setVideoFile] = useState(null)
-  const [videoPreview, setVideoPreview] = useState(null)
+  const [videoFiles, setVideoFiles] = useState([]) // [{blob, name, type, preview}]
   const [videoError, setVideoError] = useState('')
   const [videoReading, setVideoReading] = useState(false)
   const [todayVideoCount, setTodayVideoCount] = useState(0)
@@ -44,26 +43,32 @@ export default function Record({ session, setPage }) {
   }
 
   const handleVideoChange = async (e) => {
-    const file = e.target.files[0]
-    if (!file) return
+    const files = Array.from(e.target.files)
+    if (!files.length) return
     setVideoError('')
-    setVideoFile(null)
-    if (file.size > 50 * 1024 * 1024) {
-      setVideoError('動画が50MBを超えています。短く撮り直すか、短い動画にしてください。')
+    const remaining = VIDEO_DAILY_LIMIT - todayVideoCount - videoFiles.length
+    const toAdd = files.slice(0, Math.max(0, remaining))
+    if (toAdd.length < files.length) {
+      setVideoError(`上限のため${toAdd.length}件のみ追加します（本日残り${remaining}件）`)
+    }
+    const oversized = toAdd.filter(f => f.size > 50 * 1024 * 1024)
+    if (oversized.length) {
+      setVideoError(`${oversized.map(f => f.name).join(', ')} が50MBを超えています。`)
       return
     }
-    const preview = URL.createObjectURL(file)
-    setVideoPreview(preview)
     setVideoReading(true)
     try {
-      const buffer = await file.arrayBuffer()
-      const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
-      setVideoFile({ blob, name: file.name, size: file.size, type: file.type || 'video/mp4' })
-    } catch (err) {
+      const loaded = await Promise.all(toAdd.map(async file => {
+        const buffer = await file.arrayBuffer()
+        const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
+        return { blob, name: file.name, type: file.type || 'video/mp4', preview: URL.createObjectURL(file) }
+      }))
+      setVideoFiles(prev => [...prev, ...loaded])
+    } catch {
       setVideoError('動画の読み込みに失敗しました。もう一度お試しください。')
-      setVideoPreview(null)
     } finally {
       setVideoReading(false)
+      e.target.value = ''
     }
   }
 
@@ -72,22 +77,20 @@ export default function Record({ session, setPage }) {
     if (!form.total_pitches) return
     setLoading(true)
 
-    // 動画アップロード
-    let videoUrl = null
-    if (videoFile) {
-      const ext = videoFile.name.split('.').pop() || 'mp4'
-      const path = `${session.user.id}/${Date.now()}.${ext}`
-      const { data: uploadData, error: uploadError } = await supabase.storage
+    const uploadedUrls = []
+    for (const vf of videoFiles) {
+      const ext = vf.name.split('.').pop() || 'mp4'
+      const path = `${session.user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: uploadError } = await supabase.storage
         .from('pitch-videos')
-        .upload(path, videoFile.blob, { contentType: videoFile.type })
+        .upload(path, vf.blob, { contentType: vf.type })
       if (uploadError) {
         setVideoError(`動画のアップロードに失敗しました: ${uploadError.message}`)
         setLoading(false)
         return
       }
       const { data } = supabase.storage.from('pitch-videos').getPublicUrl(path)
-      videoUrl = data.publicUrl
-      console.log('video url:', videoUrl)
+      uploadedUrls.push(data.publicUrl)
     }
 
     const strikeRate = form.total_pitches ? (form.strike_count / form.total_pitches) : 0
@@ -103,7 +106,7 @@ export default function Record({ session, setPage }) {
       pitch_types: form.pitch_types,
       memo: form.memo || null,
       xp_gained: xpGained,
-      video_urls: videoUrl ? [videoUrl] : [],
+      video_urls: uploadedUrls,
     })
 
     if (!error) {
@@ -147,6 +150,9 @@ export default function Record({ session, setPage }) {
   const strikeRate = form.total_pitches && form.strike_count
     ? Math.round((form.strike_count / form.total_pitches) * 100)
     : null
+
+  const remaining = VIDEO_DAILY_LIMIT - todayVideoCount - videoFiles.length
+  const canAdd = remaining > 0
 
   return (
     <div className="p-4 max-w-lg mx-auto">
@@ -219,31 +225,37 @@ export default function Record({ session, setPage }) {
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">フォーム動画（任意）</label>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${todayVideoCount >= VIDEO_DAILY_LIMIT ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
-              本日 {todayVideoCount}/{VIDEO_DAILY_LIMIT}
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${!canAdd ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
+              本日 {todayVideoCount + videoFiles.length}/{VIDEO_DAILY_LIMIT}
             </span>
           </div>
-          {todayVideoCount >= VIDEO_DAILY_LIMIT && !videoPreview ? (
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-6">
-              <span className="text-3xl mb-2">🚫</span>
-              <span className="text-sm text-gray-400">本日の動画アップロード上限（{VIDEO_DAILY_LIMIT}件）に達しました</span>
-            </div>
-          ) : videoPreview ? (
-            <div className="space-y-2">
-              <video src={videoPreview} controls className="w-full rounded-lg max-h-48 bg-black" />
-              <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoError('') }}
+
+          {/* 選択済みの動画プレビュー */}
+          {videoFiles.map((vf, i) => (
+            <div key={vf.preview} className="mb-3 space-y-1">
+              <video src={vf.preview} controls className="w-full rounded-lg max-h-48 bg-black" />
+              <button type="button" onClick={() => setVideoFiles(prev => prev.filter((_, idx) => idx !== i))}
                 className="text-sm text-red-400 hover:text-red-600">
-                動画を削除
+                動画{videoFiles.length > 1 ? i + 1 : ''}を削除
               </button>
             </div>
-          ) : (
-            <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-6 cursor-pointer hover:border-green-400 transition-colors">
-              <span className="text-3xl mb-2">🎥</span>
+          ))}
+
+          {/* 追加ボタン */}
+          {canAdd ? (
+            <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-5 cursor-pointer hover:border-green-400 transition-colors">
+              <span className="text-3xl mb-1">🎥</span>
               <span className="text-sm text-gray-500">タップして動画を選択</span>
-              <span className="text-xs text-gray-400 mt-1">MP4・MOV など（50MB以内）</span>
-              <input type="file" accept="video/*" onChange={handleVideoChange} className="hidden" />
+              <span className="text-xs text-gray-400 mt-1">複数選択可・各50MB以内（あと{remaining}件）</span>
+              <input type="file" accept="video/*" multiple onChange={handleVideoChange} className="hidden" />
             </label>
+          ) : (
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-5">
+              <span className="text-3xl mb-1">🚫</span>
+              <span className="text-sm text-gray-400">本日の上限（{VIDEO_DAILY_LIMIT}件）に達しました</span>
+            </div>
           )}
+
           {videoReading && (
             <p className="text-sm text-blue-500 bg-blue-50 rounded-lg px-3 py-2 mt-2">動画を読み込み中... しばらくお待ちください</p>
           )}
@@ -254,7 +266,7 @@ export default function Record({ session, setPage }) {
 
         <button type="submit" disabled={loading || videoReading}
           className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-2xl text-lg transition-colors disabled:opacity-50">
-          {videoReading ? '動画準備中...' : loading ? (videoFile ? '動画アップロード中...' : '保存中...') : '記録を保存する ⚾'}
+          {videoReading ? '動画準備中...' : loading ? (videoFiles.length ? '動画アップロード中...' : '保存中...') : '記録を保存する ⚾'}
         </button>
       </form>
     </div>
