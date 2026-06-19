@@ -39,7 +39,6 @@ function EditModal({ record, onClose, onSave }) {
         memo: form.memo || null,
       })
       .eq('id', record.id)
-
     setSaving(false)
     if (!error) onSave()
   }
@@ -55,7 +54,6 @@ function EditModal({ record, onClose, onSave }) {
           <h2 className="text-lg font-bold text-gray-800">記録を編集</h2>
           <button onClick={onClose} className="text-gray-400 text-2xl leading-none">&times;</button>
         </div>
-
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">練習日</label>
@@ -82,8 +80,7 @@ function EditModal({ record, onClose, onSave }) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                ストライク数
-                {strikeRate !== null && <span className="text-green-500 ml-1">({strikeRate}%)</span>}
+                ストライク数{strikeRate !== null && <span className="text-green-500 ml-1">({strikeRate}%)</span>}
               </label>
               <input type="number" value={form.strike_count} onChange={e => set('strike_count', e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
@@ -108,7 +105,6 @@ function EditModal({ record, onClose, onSave }) {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
           </div>
         </div>
-
         <button onClick={handleSave} disabled={saving}
           className="w-full mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
           {saving ? '保存中...' : '保存する'}
@@ -118,21 +114,23 @@ function EditModal({ record, onClose, onSave }) {
   )
 }
 
-export default function Stats({ session }) {
+export default function Stats({ session, targetUserId, isOwn, setPage }) {
   const [records, setRecords] = useState([])
+  const [profileName, setProfileName] = useState('')
   const [loading, setLoading] = useState(true)
   const [editingRecord, setEditingRecord] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
 
-  useEffect(() => { fetchRecords() }, [])
+  useEffect(() => { fetchRecords() }, [targetUserId])
 
   async function fetchRecords() {
-    const { data } = await supabase
-      .from('pitch_records')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('practiced_at', { ascending: true })
+    setLoading(true)
+    const [{ data }, { data: profile }] = await Promise.all([
+      supabase.from('pitch_records').select('*').eq('user_id', targetUserId).order('practiced_at', { ascending: true }),
+      supabase.from('profiles').select('display_name').eq('id', targetUserId).single(),
+    ])
     setRecords(data || [])
+    setProfileName(profile?.display_name || '')
     setLoading(false)
   }
 
@@ -149,8 +147,11 @@ export default function Stats({ session }) {
   if (records.length === 0) {
     return (
       <div className="p-6 text-center pt-20">
+        {!isOwn && (
+          <button onClick={() => setPage('team')} className="text-green-600 text-sm mb-6 block mx-auto">← チームに戻る</button>
+        )}
         <div className="text-5xl mb-4">📊</div>
-        <p className="text-gray-500">記録がまだありません。<br />練習を記録してみよう！</p>
+        <p className="text-gray-500">{isOwn ? '記録がまだありません。' : `${profileName}さんの記録はまだありません。`}</p>
       </div>
     )
   }
@@ -168,7 +169,14 @@ export default function Stats({ session }) {
 
   return (
     <div className="p-4 max-w-lg mx-auto">
-      <h1 className="text-xl font-bold text-gray-800 mb-4 pt-2">あなたの統計</h1>
+      {!isOwn && (
+        <button onClick={() => setPage('team')} className="text-green-600 text-sm mb-2 flex items-center gap-1">
+          ← チームに戻る
+        </button>
+      )}
+      <h1 className="text-xl font-bold text-gray-800 mb-4 pt-1">
+        {isOwn ? 'あなたの統計' : `${profileName}さんの統計`}
+      </h1>
 
       {/* サマリー */}
       <div className="grid grid-cols-3 gap-3 mb-4">
@@ -218,27 +226,42 @@ export default function Stats({ session }) {
       {/* 記録一覧 */}
       <div className="bg-white rounded-2xl shadow-sm p-4">
         <h2 className="font-bold text-gray-700 mb-3">全記録</h2>
-        <div className="space-y-1">
+        <div className="space-y-3">
           {[...records].reverse().map(r => (
-            <div key={r.id} className="flex items-center gap-2 py-2.5 border-b border-gray-50 last:border-0">
-              <div className="text-sm text-gray-500 w-16 shrink-0">
-                {new Date(r.practiced_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+            <div key={r.id} className="border-b border-gray-50 last:border-0 pb-3 last:pb-0">
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-gray-500 w-16 shrink-0">
+                  {new Date(r.practiced_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                </div>
+                <div className="font-bold text-green-600 w-20 shrink-0">{r.max_speed} km/h</div>
+                <div className="text-sm text-gray-400 flex-1">
+                  {r.total_pitches}球 / {r.total_pitches ? `${Math.round((r.strike_count / r.total_pitches) * 100)}%` : '-'}
+                </div>
+                {isOwn && (
+                  <>
+                    <button onClick={() => setEditingRecord(r)}
+                      className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 shrink-0">
+                      編集
+                    </button>
+                    <button onClick={() => handleDelete(r.id)} disabled={deletingId === r.id}
+                      className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 shrink-0 disabled:opacity-40">
+                      削除
+                    </button>
+                  </>
+                )}
               </div>
-              <div className="font-bold text-green-600 w-20 shrink-0">{r.max_speed} km/h</div>
-              <div className="text-sm text-gray-400 flex-1">{r.total_pitches}球 / {r.total_pitches ? `${Math.round((r.strike_count / r.total_pitches) * 100)}%` : '-'}</div>
-              <button
-                onClick={() => setEditingRecord(r)}
-                className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
-              >
-                編集
-              </button>
-              <button
-                onClick={() => handleDelete(r.id)}
-                disabled={deletingId === r.id}
-                className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors shrink-0 disabled:opacity-40"
-              >
-                削除
-              </button>
+              {r.pitch_types?.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5 ml-16">
+                  {r.pitch_types.map(t => (
+                    <span key={t} className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">{t}</span>
+                  ))}
+                </div>
+              )}
+              {r.memo && (
+                <div className="mt-1.5 ml-16 text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-1.5">
+                  {r.memo}
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -23,7 +23,7 @@ function getLevelInfo(xp) {
   return current
 }
 
-export default function Team({ session }) {
+export default function Team({ session, setPage }) {
   const [tab, setTab] = useState('speed')
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -157,7 +157,8 @@ export default function Team({ session }) {
             return (
               <div
                 key={m.id}
-                className={`bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 ${isMe ? 'ring-2 ring-green-400' : ''}`}
+                onClick={() => setPage('stats', m.id)}
+                className={`bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 cursor-pointer active:scale-95 transition-transform ${isMe ? 'ring-2 ring-green-400' : ''}`}
               >
                 <div className={`text-xl font-bold w-8 text-center ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-amber-600' : 'text-gray-300'}`}>
                   {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
@@ -177,6 +178,7 @@ export default function Team({ session }) {
                 </div>
                 <div className="text-right">
                   <div className="font-bold text-lg" style={{ color }}>{getValue(m)}</div>
+                  <div className="text-xs text-gray-300 mt-0.5">タップで詳細 →</div>
                 </div>
               </div>
             )

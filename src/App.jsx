@@ -10,6 +10,7 @@ import Nav from './components/Nav'
 export default function App() {
   const [session, setSession] = useState(null)
   const [page, setPage] = useState('home')
+  const [viewingUserId, setViewingUserId] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -23,6 +24,11 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
+  const navigateTo = (newPage, userId = null) => {
+    setViewingUserId(userId)
+    setPage(newPage)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-50 to-green-100">
@@ -35,13 +41,22 @@ export default function App() {
     return <Auth />
   }
 
-  const pages = { home: Home, record: Record, stats: Stats, team: Team }
-  const PageComponent = pages[page] || Home
+  const targetUserId = viewingUserId || session.user.id
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-green-100 pb-20">
-      <PageComponent session={session} setPage={setPage} />
-      <Nav page={page} setPage={setPage} />
+      {page === 'home' && <Home session={session} setPage={navigateTo} />}
+      {page === 'record' && <Record session={session} setPage={navigateTo} />}
+      {page === 'stats' && (
+        <Stats
+          session={session}
+          targetUserId={targetUserId}
+          isOwn={targetUserId === session.user.id}
+          setPage={navigateTo}
+        />
+      )}
+      {page === 'team' && <Team session={session} setPage={navigateTo} />}
+      <Nav page={page} setPage={navigateTo} />
     </div>
   )
 }
