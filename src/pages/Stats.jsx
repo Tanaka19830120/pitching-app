@@ -306,7 +306,13 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
               )}
               {r.video_url && (
                 <div className="mt-2 ml-16">
-                  <video src={r.video_url} controls className="w-full rounded-xl max-h-52 bg-black" />
+                  <video src={r.video_url} controls playsInline className="w-full rounded-xl max-h-52 bg-black">
+                    <source src={r.video_url} />
+                  </video>
+                  <a href={r.video_url} target="_blank" rel="noreferrer"
+                    className="text-xs text-blue-500 hover:underline mt-1 block">
+                    動画を開く / ダウンロード
+                  </a>
                 </div>
               )}
             </div>
