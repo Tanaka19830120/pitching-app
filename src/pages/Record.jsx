@@ -25,11 +25,13 @@ export default function Record({ session, setPage }) {
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0]
     supabase.from('pitch_records')
-      .select('id', { count: 'exact' })
+      .select('video_urls')
       .eq('user_id', session.user.id)
       .eq('practiced_at', today)
-      .not('video_url', 'is', null)
-      .then(({ count }) => setTodayVideoCount(count || 0))
+      .then(({ data }) => {
+        const total = (data || []).reduce((sum, r) => sum + (r.video_urls?.length || 0), 0)
+        setTodayVideoCount(total)
+      })
   }, [])
 
   const set = (key, value) => setForm(f => ({ ...f, [key]: value }))
@@ -101,7 +103,7 @@ export default function Record({ session, setPage }) {
       pitch_types: form.pitch_types,
       memo: form.memo || null,
       xp_gained: xpGained,
-      video_url: videoUrl,
+      video_urls: videoUrl ? [videoUrl] : [],
     })
 
     if (!error) {

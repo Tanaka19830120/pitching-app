@@ -3,7 +3,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { supabase } from '../supabase'
 
 const PITCH_TYPES = ['ストレート', 'チェンジアップ', 'ライズボール', 'ドロップ', 'カーブ', 'スクリュー']
-
 const VIDEO_DAILY_LIMIT = 3
 
 function EditModal({ record, session, onClose, onSave }) {
@@ -16,8 +15,11 @@ function EditModal({ record, session, onClose, onSave }) {
     pitch_types: record.pitch_types || [],
     memo: record.memo || '',
   })
-  const [videoFile, setVideoFile] = useState(null)
-  const [videoPreview, setVideoPreview] = useState(record.video_url || null)
+  // 既存の動画URL一覧（削除可能）
+  const [videoUrls, setVideoUrls] = useState(record.video_urls || [])
+  // 新たに追加する動画ファイル（1枚ずつ）
+  const [newVideoFile, setNewVideoFile] = useState(null)
+  const [newVideoPreview, setNewVideoPreview] = useState(null)
   const [videoError, setVideoError] = useState('')
   const [videoReading, setVideoReading] = useState(false)
   const [todayVideoCount, setTodayVideoCount] = useState(0)
@@ -25,16 +27,16 @@ function EditModal({ record, session, onClose, onSave }) {
   const fileInputRef = useRef(null)
 
   useEffect(() => {
-    // 元々動画がない記録に新規追加する場合のみ上限チェックが必要
-    if (!record.video_url) {
-      const today = new Date().toISOString().split('T')[0]
-      supabase.from('pitch_records')
-        .select('id', { count: 'exact' })
-        .eq('user_id', session.user.id)
-        .eq('practiced_at', today)
-        .not('video_url', 'is', null)
-        .then(({ count }) => setTodayVideoCount(count || 0))
-    }
+    // 今日の合計動画数を取得（上限チェック用）
+    const today = new Date().toISOString().split('T')[0]
+    supabase.from('pitch_records')
+      .select('video_urls')
+      .eq('user_id', session.user.id)
+      .eq('practiced_at', today)
+      .then(({ data }) => {
+        const total = (data || []).reduce((sum, r) => sum + (r.video_urls?.length || 0), 0)
+        setTodayVideoCount(total)
+      })
   }, [])
 
   const set = (key, value) => setForm(f => ({ ...f, [key]: value }))
@@ -46,29 +48,46 @@ function EditModal({ record, session, onClose, onSave }) {
     )
   }
 
-  const handleVideoChange = (e) => {
+  const handleVideoSelect = async (e) => {
     const file = e.target.files[0]
     if (!file) return
-    setVideoFile(file)
-    setVideoPreview(URL.createObjectURL(file))
+    setVideoError('')
+    setNewVideoFile(null)
+    if (file.size > 50 * 1024 * 1024) {
+      setVideoError('動画が50MBを超えています。短い動画にしてください。')
+      return
+    }
+    setNewVideoPreview(URL.createObjectURL(file))
+    setVideoReading(true)
+    try {
+      const buffer = await file.arrayBuffer()
+      const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
+      setNewVideoFile({ blob, name: file.name, type: file.type || 'video/mp4' })
+    } catch {
+      setVideoError('動画の読み込みに失敗しました。もう一度お試しください。')
+      setNewVideoPreview(null)
+    } finally {
+      setVideoReading(false)
+    }
   }
 
   const handleSave = async () => {
     setSaving(true)
 
-    let videoUrl = record.video_url
-    if (videoFile) {
-      const ext = videoFile.name.split('.').pop()
+    let finalUrls = [...videoUrls]
+    if (newVideoFile) {
+      const ext = newVideoFile.name.split('.').pop() || 'mp4'
       const path = `${session.user.id}/${Date.now()}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('pitch-videos')
-        .upload(path, videoFile.blob, { contentType: videoFile.type })
-      if (!uploadError) {
-        const { data } = supabase.storage.from('pitch-videos').getPublicUrl(path)
-        videoUrl = data.publicUrl
+        .upload(path, newVideoFile.blob, { contentType: newVideoFile.type })
+      if (uploadError) {
+        setVideoError(`動画のアップロードに失敗しました: ${uploadError.message}`)
+        setSaving(false)
+        return
       }
-    } else if (!videoPreview) {
-      videoUrl = null
+      const { data } = supabase.storage.from('pitch-videos').getPublicUrl(path)
+      finalUrls = [...finalUrls, data.publicUrl]
     }
 
     const { error } = await supabase
@@ -81,16 +100,20 @@ function EditModal({ record, session, onClose, onSave }) {
         strike_count: Number(form.strike_count),
         pitch_types: form.pitch_types,
         memo: form.memo || null,
-        video_url: videoUrl,
+        video_urls: finalUrls,
       })
       .eq('id', record.id)
     setSaving(false)
     if (!error) onSave()
+    else setVideoError(`保存に失敗しました。RLSポリシーの設定を確認してください。`)
   }
 
   const strikeRate = form.total_pitches && form.strike_count
     ? Math.round((form.strike_count / form.total_pitches) * 100)
     : null
+
+  const canAddMore = (videoUrls.length + (newVideoFile ? 1 : 0)) < VIDEO_DAILY_LIMIT
+    && todayVideoCount < VIDEO_DAILY_LIMIT
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
@@ -149,64 +172,48 @@ function EditModal({ record, session, onClose, onSave }) {
             <textarea value={form.memo} onChange={e => set('memo', e.target.value)} rows={2}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
           </div>
+
+          {/* 動画セクション */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">フォーム動画</label>
-              {!record.video_url && (
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${todayVideoCount >= VIDEO_DAILY_LIMIT ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
-                  本日 {todayVideoCount}/{VIDEO_DAILY_LIMIT}
-                </span>
-              )}
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${todayVideoCount >= VIDEO_DAILY_LIMIT ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
+                本日 {todayVideoCount}/{VIDEO_DAILY_LIMIT}
+              </span>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="video/*"
-              style={{ display: 'none' }}
-              onChange={async e => {
-                const file = e.target.files[0]
-                if (!file) return
-                setVideoError('')
-                setVideoFile(null)
-                if (file.size > 50 * 1024 * 1024) {
-                  setVideoError('動画が50MBを超えています。短い動画にしてください。')
-                  return
-                }
-                setVideoPreview(URL.createObjectURL(file))
-                setVideoReading(true)
-                try {
-                  const buffer = await file.arrayBuffer()
-                  const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
-                  setVideoFile({ blob, name: file.name, size: file.size, type: file.type || 'video/mp4' })
-                } catch (err) {
-                  setVideoError('動画の読み込みに失敗しました。もう一度お試しください。')
-                  setVideoPreview(null)
-                } finally {
-                  setVideoReading(false)
-                }
-              }}
-            />
-            {videoPreview ? (
-              <div className="space-y-2">
-                <video src={videoPreview} controls playsInline className="w-full rounded-lg max-h-40 bg-black" />
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => fileInputRef.current?.click()}
-                    className="text-sm text-blue-500 hover:text-blue-700">動画を変更</button>
-                  <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoError('') }}
-                    className="text-sm text-red-400 hover:text-red-600">動画を削除</button>
-                </div>
+
+            <input ref={fileInputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={handleVideoSelect} />
+
+            {/* 既存の動画一覧 */}
+            {videoUrls.map((url, i) => (
+              <div key={url} className="mb-2 space-y-1">
+                <video src={url} controls playsInline className="w-full rounded-lg max-h-40 bg-black" />
+                <button type="button" onClick={() => setVideoUrls(prev => prev.filter((_, idx) => idx !== i))}
+                  className="text-xs text-red-400 hover:text-red-600">動画 {i + 1} を削除</button>
               </div>
-            ) : !record.video_url && todayVideoCount >= VIDEO_DAILY_LIMIT ? (
-              <p className="text-sm text-gray-400 bg-gray-50 rounded-lg px-3 py-2">本日の動画上限（{VIDEO_DAILY_LIMIT}件）に達しました</p>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-sm text-blue-500 hover:text-blue-700 px-3 py-2 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
-              >
-                🎥 動画を追加
-              </button>
+            ))}
+
+            {/* 新たに追加する動画プレビュー */}
+            {newVideoPreview && (
+              <div className="mb-2 space-y-1">
+                <video src={newVideoPreview} controls playsInline className="w-full rounded-lg max-h-40 bg-black" />
+                <button type="button" onClick={() => { setNewVideoFile(null); setNewVideoPreview(null) }}
+                  className="text-xs text-red-400 hover:text-red-600">追加予定の動画を削除</button>
+              </div>
             )}
+
+            {/* 動画を追加ボタン */}
+            {!newVideoPreview && (
+              canAddMore ? (
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  className="text-sm text-blue-500 hover:text-blue-700 px-3 py-2 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors">
+                  🎥 動画を追加
+                </button>
+              ) : (
+                <p className="text-sm text-gray-400 bg-gray-50 rounded-lg px-3 py-2">本日の動画上限（{VIDEO_DAILY_LIMIT}件）に達しました</p>
+              )
+            )}
+
             {videoReading && (
               <p className="text-sm text-blue-500 bg-blue-50 rounded-lg px-3 py-2 mt-2">動画を読み込み中... しばらくお待ちください</p>
             )}
@@ -215,6 +222,7 @@ function EditModal({ record, session, onClose, onSave }) {
             )}
           </div>
         </div>
+
         <div className="flex gap-3 mt-4">
           <button onClick={onClose} disabled={saving}
             className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
@@ -256,7 +264,6 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
     await supabase.from('pitch_records').delete().eq('id', id)
     const newRecords = records.filter(r => r.id !== id)
     setRecords(newRecords)
-    // 残った記録から合計を再計算してprofilesを更新
     const newTotal = newRecords.reduce((sum, r) => sum + (r.total_pitches || 0), 0)
     await supabase.from('profiles').update({ total_pitches: newTotal }).eq('id', session.user.id)
     setDeletingId(null)
@@ -382,15 +389,17 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
                   {r.memo}
                 </div>
               )}
-              {r.video_url && (
-                <div className="mt-2 ml-16">
-                  <video src={r.video_url} controls playsInline className="w-full rounded-xl max-h-52 bg-black">
-                    <source src={r.video_url} />
-                  </video>
-                  <a href={r.video_url} target="_blank" rel="noreferrer"
-                    className="text-xs text-blue-500 hover:underline mt-1 block">
-                    動画を開く / ダウンロード
-                  </a>
+              {r.video_urls?.length > 0 && (
+                <div className="mt-2 ml-16 space-y-2">
+                  {r.video_urls.map((url, i) => (
+                    <div key={url}>
+                      <video src={url} controls playsInline className="w-full rounded-xl max-h-52 bg-black" />
+                      <a href={url} target="_blank" rel="noreferrer"
+                        className="text-xs text-blue-500 hover:underline mt-1 block">
+                        動画{r.video_urls.length > 1 ? ` ${i + 1}` : ''} を開く / ダウンロード
+                      </a>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
