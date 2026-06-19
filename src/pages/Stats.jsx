@@ -28,8 +28,12 @@ function EditModal({ record, session, onClose, onSave }) {
     pitch_types: record.pitch_types || [],
     memo: record.memo || '',
   })
-  // 既存の動画URL一覧（削除可能）
-  const [videoUrls, setVideoUrls] = useState(record.video_urls || [])
+  // 既存の動画URL一覧（video_urlsが空なら旧video_urlにフォールバック）
+  const [videoUrls, setVideoUrls] = useState(
+    record.video_urls?.length ? record.video_urls
+    : record.video_url ? [record.video_url]
+    : []
+  )
   // 新たに追加する動画ファイル（1枚ずつ）
   const [newVideoFile, setNewVideoFile] = useState(null)
   const [newVideoPreview, setNewVideoPreview] = useState(null)
@@ -199,27 +203,34 @@ function EditModal({ record, session, onClose, onSave }) {
 
             {/* 既存の動画一覧 */}
             {videoUrls.map((url, i) => (
-              <div key={url} className="mb-2 space-y-1">
+              <div key={url} className="mb-3 space-y-1.5">
                 <video src={url} controls playsInline className="w-full rounded-lg max-h-40 bg-black" />
-                <button type="button" onClick={async () => {
-                  await deleteVideosFromStorage([url])
-                  setVideoUrls(prev => prev.filter((_, idx) => idx !== i))
-                }}
-                  className="text-xs text-red-400 hover:text-red-600">動画 {i + 1} を削除</button>
+                <div className="flex gap-3 items-center">
+                  {canAddMore && !newVideoPreview && (
+                    <button type="button" onClick={() => fileInputRef.current?.click()}
+                      className="text-xs text-blue-500 hover:text-blue-700">動画を追加</button>
+                  )}
+                  <button type="button" onClick={async () => {
+                    await deleteVideosFromStorage([url])
+                    setVideoUrls(prev => prev.filter((_, idx) => idx !== i))
+                  }} className="text-xs text-red-400 hover:text-red-600">
+                    {videoUrls.length > 1 ? `動画${i + 1}を削除` : '動画を削除'}
+                  </button>
+                </div>
               </div>
             ))}
 
             {/* 新たに追加する動画プレビュー */}
             {newVideoPreview && (
-              <div className="mb-2 space-y-1">
+              <div className="mb-2 space-y-1.5">
                 <video src={newVideoPreview} controls playsInline className="w-full rounded-lg max-h-40 bg-black" />
                 <button type="button" onClick={() => { setNewVideoFile(null); setNewVideoPreview(null) }}
                   className="text-xs text-red-400 hover:text-red-600">追加予定の動画を削除</button>
               </div>
             )}
 
-            {/* 動画を追加ボタン */}
-            {!newVideoPreview && (
+            {/* 動画が0枚のとき */}
+            {videoUrls.length === 0 && !newVideoPreview && (
               canAddMore ? (
                 <button type="button" onClick={() => fileInputRef.current?.click()}
                   className="text-sm text-blue-500 hover:text-blue-700 px-3 py-2 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors">
@@ -407,19 +418,22 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
                   {r.memo}
                 </div>
               )}
-              {r.video_urls?.length > 0 && (
-                <div className="mt-2 ml-16 space-y-2">
-                  {r.video_urls.map((url, i) => (
-                    <div key={url}>
-                      <video src={url} controls playsInline className="w-full rounded-xl max-h-52 bg-black" />
-                      <a href={url} target="_blank" rel="noreferrer"
-                        className="text-xs text-blue-500 hover:underline mt-1 block">
-                        動画{r.video_urls.length > 1 ? ` ${i + 1}` : ''} を開く / ダウンロード
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const urls = r.video_urls?.length ? r.video_urls : r.video_url ? [r.video_url] : []
+                return urls.length > 0 && (
+                  <div className="mt-2 ml-16 space-y-2">
+                    {urls.map((url, i) => (
+                      <div key={url}>
+                        <video src={url} controls playsInline className="w-full rounded-xl max-h-52 bg-black" />
+                        <a href={url} target="_blank" rel="noreferrer"
+                          className="text-xs text-blue-500 hover:underline mt-1 block">
+                          動画{urls.length > 1 ? ` ${i + 1}` : ''} を開く / ダウンロード
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </div>
           ))}
         </div>
