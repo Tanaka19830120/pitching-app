@@ -2,21 +2,147 @@ import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../supabase'
 
+const PITCH_TYPES = ['ストレート', 'チェンジアップ', 'ライズボール', 'ドロップ', 'カーブ', 'スクリュー']
+
+function EditModal({ record, onClose, onSave }) {
+  const [form, setForm] = useState({
+    practiced_at: record.practiced_at,
+    max_speed: record.max_speed,
+    avg_speed: record.avg_speed || '',
+    total_pitches: record.total_pitches,
+    strike_count: record.strike_count || 0,
+    pitch_types: record.pitch_types || [],
+    memo: record.memo || '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  const set = (key, value) => setForm(f => ({ ...f, [key]: value }))
+
+  const togglePitchType = (type) => {
+    set('pitch_types', form.pitch_types.includes(type)
+      ? form.pitch_types.filter(t => t !== type)
+      : [...form.pitch_types, type]
+    )
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    const { error } = await supabase
+      .from('pitch_records')
+      .update({
+        practiced_at: form.practiced_at,
+        max_speed: Number(form.max_speed),
+        avg_speed: form.avg_speed ? Number(form.avg_speed) : null,
+        total_pitches: Number(form.total_pitches),
+        strike_count: Number(form.strike_count),
+        pitch_types: form.pitch_types,
+        memo: form.memo || null,
+      })
+      .eq('id', record.id)
+
+    setSaving(false)
+    if (!error) onSave()
+  }
+
+  const strikeRate = form.total_pitches && form.strike_count
+    ? Math.round((form.strike_count / form.total_pitches) * 100)
+    : null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="bg-white rounded-t-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-800">記録を編集</h2>
+          <button onClick={onClose} className="text-gray-400 text-2xl leading-none">&times;</button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">練習日</label>
+            <input type="date" value={form.practiced_at} onChange={e => set('practiced_at', e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">最速 (km/h)</label>
+              <input type="number" value={form.max_speed} onChange={e => set('max_speed', e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">平均球速 (km/h)</label>
+              <input type="number" value={form.avg_speed} onChange={e => set('avg_speed', e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">投球数</label>
+              <input type="number" value={form.total_pitches} onChange={e => set('total_pitches', e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ストライク数
+                {strikeRate !== null && <span className="text-green-500 ml-1">({strikeRate}%)</span>}
+              </label>
+              <input type="number" value={form.strike_count} onChange={e => set('strike_count', e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">球種</label>
+            <div className="flex flex-wrap gap-2">
+              {PITCH_TYPES.map(type => (
+                <button key={type} type="button" onClick={() => togglePitchType(type)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    form.pitch_types.includes(type) ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">メモ</label>
+            <textarea value={form.memo} onChange={e => set('memo', e.target.value)} rows={2}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
+          </div>
+        </div>
+
+        <button onClick={handleSave} disabled={saving}
+          className="w-full mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
+          {saving ? '保存中...' : '保存する'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Stats({ session }) {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
+  const [editingRecord, setEditingRecord] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
 
-  useEffect(() => {
-    supabase
+  useEffect(() => { fetchRecords() }, [])
+
+  async function fetchRecords() {
+    const { data } = await supabase
       .from('pitch_records')
       .select('*')
       .eq('user_id', session.user.id)
       .order('practiced_at', { ascending: true })
-      .then(({ data }) => {
-        setRecords(data || [])
-        setLoading(false)
-      })
-  }, [])
+    setRecords(data || [])
+    setLoading(false)
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('この記録を削除しますか？')) return
+    setDeletingId(id)
+    await supabase.from('pitch_records').delete().eq('id', id)
+    setRecords(prev => prev.filter(r => r.id !== id))
+    setDeletingId(null)
+  }
 
   if (loading) return <div className="p-6 text-center text-gray-400 pt-20">読み込み中...</div>
 
@@ -92,19 +218,39 @@ export default function Stats({ session }) {
       {/* 記録一覧 */}
       <div className="bg-white rounded-2xl shadow-sm p-4">
         <h2 className="font-bold text-gray-700 mb-3">全記録</h2>
-        <div className="space-y-2">
+        <div className="space-y-1">
           {[...records].reverse().map(r => (
-            <div key={r.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-              <div className="text-sm text-gray-500">{new Date(r.practiced_at).toLocaleDateString('ja-JP')}</div>
-              <div className="font-bold text-green-600">{r.max_speed} km/h</div>
-              <div className="text-sm text-gray-400">{r.total_pitches}球</div>
-              <div className="text-sm text-gray-400">
-                {r.total_pitches ? `${Math.round((r.strike_count / r.total_pitches) * 100)}%` : '-'}
+            <div key={r.id} className="flex items-center gap-2 py-2.5 border-b border-gray-50 last:border-0">
+              <div className="text-sm text-gray-500 w-16 shrink-0">
+                {new Date(r.practiced_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
               </div>
+              <div className="font-bold text-green-600 w-20 shrink-0">{r.max_speed} km/h</div>
+              <div className="text-sm text-gray-400 flex-1">{r.total_pitches}球 / {r.total_pitches ? `${Math.round((r.strike_count / r.total_pitches) * 100)}%` : '-'}</div>
+              <button
+                onClick={() => setEditingRecord(r)}
+                className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
+              >
+                編集
+              </button>
+              <button
+                onClick={() => handleDelete(r.id)}
+                disabled={deletingId === r.id}
+                className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors shrink-0 disabled:opacity-40"
+              >
+                削除
+              </button>
             </div>
           ))}
         </div>
       </div>
+
+      {editingRecord && (
+        <EditModal
+          record={editingRecord}
+          onClose={() => setEditingRecord(null)}
+          onSave={() => { setEditingRecord(null); fetchRecords() }}
+        />
+      )}
     </div>
   )
 }
