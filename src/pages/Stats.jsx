@@ -4,16 +4,18 @@ import { supabase } from '../supabase'
 
 const PITCH_TYPES = ['ストレート', 'チェンジアップ', 'ライズボール', 'ドロップ', 'カーブ', 'スクリュー']
 
-function EditModal({ record, onClose, onSave }) {
+function EditModal({ record, session, onClose, onSave }) {
   const [form, setForm] = useState({
     practiced_at: record.practiced_at,
-    max_speed: record.max_speed,
+    max_speed: record.max_speed || '',
     avg_speed: record.avg_speed || '',
     total_pitches: record.total_pitches,
     strike_count: record.strike_count || 0,
     pitch_types: record.pitch_types || [],
     memo: record.memo || '',
   })
+  const [videoFile, setVideoFile] = useState(null)
+  const [videoPreview, setVideoPreview] = useState(record.video_url || null)
   const [saving, setSaving] = useState(false)
 
   const set = (key, value) => setForm(f => ({ ...f, [key]: value }))
@@ -25,18 +27,42 @@ function EditModal({ record, onClose, onSave }) {
     )
   }
 
+  const handleVideoChange = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setVideoFile(file)
+    setVideoPreview(URL.createObjectURL(file))
+  }
+
   const handleSave = async () => {
     setSaving(true)
+
+    let videoUrl = record.video_url
+    if (videoFile) {
+      const ext = videoFile.name.split('.').pop()
+      const path = `${session.user.id}/${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('pitch-videos')
+        .upload(path, videoFile, { contentType: videoFile.type })
+      if (!uploadError) {
+        const { data } = supabase.storage.from('pitch-videos').getPublicUrl(path)
+        videoUrl = data.publicUrl
+      }
+    } else if (!videoPreview) {
+      videoUrl = null
+    }
+
     const { error } = await supabase
       .from('pitch_records')
       .update({
         practiced_at: form.practiced_at,
-        max_speed: Number(form.max_speed),
+        max_speed: form.max_speed ? Number(form.max_speed) : null,
         avg_speed: form.avg_speed ? Number(form.avg_speed) : null,
         total_pitches: Number(form.total_pitches),
         strike_count: Number(form.strike_count),
         pitch_types: form.pitch_types,
         memo: form.memo || null,
+        video_url: videoUrl,
       })
       .eq('id', record.id)
     setSaving(false)
@@ -103,6 +129,22 @@ function EditModal({ record, onClose, onSave }) {
             <label className="block text-sm font-medium text-gray-700 mb-1">メモ</label>
             <textarea value={form.memo} onChange={e => set('memo', e.target.value)} rows={2}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">フォーム動画</label>
+            {videoPreview ? (
+              <div className="space-y-2">
+                <video src={videoPreview} controls className="w-full rounded-lg max-h-40 bg-black" />
+                <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null) }}
+                  className="text-sm text-red-400 hover:text-red-600">動画を削除</button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-4 cursor-pointer hover:border-green-400 transition-colors">
+                <span className="text-2xl mb-1">🎥</span>
+                <span className="text-sm text-gray-500">タップして動画を選択</span>
+                <input type="file" accept="video/*" onChange={handleVideoChange} className="hidden" />
+              </label>
+            )}
           </div>
         </div>
         <button onClick={handleSave} disabled={saving}
@@ -275,6 +317,7 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
       {editingRecord && (
         <EditModal
           record={editingRecord}
+          session={session}
           onClose={() => setEditingRecord(null)}
           onSave={() => { setEditingRecord(null); fetchRecords() }}
         />
