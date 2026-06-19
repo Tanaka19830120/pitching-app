@@ -48,11 +48,13 @@ export default function Record({ session, setPage }) {
     // 動画アップロード
     let videoUrl = null
     if (videoFile) {
-      const ext = videoFile.name.split('.').pop()
+      const ext = videoFile.name.split('.').pop() || 'mp4'
       const path = `${session.user.id}/${Date.now()}.${ext}`
-      const { error: uploadError } = await supabase.storage
+      console.log('uploading video:', { name: videoFile.name, size: videoFile.size, type: videoFile.type, path })
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('pitch-videos')
-        .upload(path, videoFile, { contentType: videoFile.type })
+        .upload(path, videoFile, { contentType: videoFile.type || 'video/mp4' })
+      console.log('upload result:', { uploadData, uploadError })
       if (uploadError) {
         setVideoError(`動画のアップロードに失敗しました: ${uploadError.message}`)
         setLoading(false)
@@ -60,6 +62,7 @@ export default function Record({ session, setPage }) {
       }
       const { data } = supabase.storage.from('pitch-videos').getPublicUrl(path)
       videoUrl = data.publicUrl
+      console.log('video url:', videoUrl)
     }
 
     const strikeRate = form.total_pitches ? (form.strike_count / form.total_pitches) : 0
