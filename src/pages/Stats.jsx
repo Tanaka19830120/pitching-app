@@ -45,7 +45,7 @@ function EditModal({ record, session, onClose, onSave }) {
       const path = `${session.user.id}/${Date.now()}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('pitch-videos')
-        .upload(path, videoFile, { contentType: videoFile.type })
+        .upload(path, videoFile.blob, { contentType: videoFile.type })
       if (!uploadError) {
         const { data } = supabase.storage.from('pitch-videos').getPublicUrl(path)
         videoUrl = data.publicUrl
@@ -139,7 +139,7 @@ function EditModal({ record, session, onClose, onSave }) {
               type="file"
               accept="video/*"
               style={{ display: 'none' }}
-              onChange={e => {
+              onChange={async e => {
                 const file = e.target.files[0]
                 if (!file) return
                 setVideoError('')
@@ -147,8 +147,10 @@ function EditModal({ record, session, onClose, onSave }) {
                   setVideoError('動画が50MBを超えています。短い動画にしてください。')
                   return
                 }
-                setVideoFile(file)
                 setVideoPreview(URL.createObjectURL(file))
+                const buffer = await file.arrayBuffer()
+                const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
+                setVideoFile({ blob, name: file.name, size: file.size, type: file.type || 'video/mp4' })
               }}
             />
             {videoPreview ? (

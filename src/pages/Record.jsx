@@ -28,7 +28,7 @@ export default function Record({ session, setPage }) {
     )
   }
 
-  const handleVideoChange = (e) => {
+  const handleVideoChange = async (e) => {
     const file = e.target.files[0]
     if (!file) return
     setVideoError('')
@@ -36,8 +36,12 @@ export default function Record({ session, setPage }) {
       setVideoError('動画が50MBを超えています。短く撮り直すか、短い動画にしてください。')
       return
     }
-    setVideoFile(file)
-    setVideoPreview(URL.createObjectURL(file))
+    // iOS Safari対策: 選択直後にBlobとして読み込む
+    const preview = URL.createObjectURL(file)
+    setVideoPreview(preview)
+    const buffer = await file.arrayBuffer()
+    const blob = new Blob([buffer], { type: file.type || 'video/mp4' })
+    setVideoFile({ blob, name: file.name, size: file.size, type: file.type || 'video/mp4' })
   }
 
   const handleSubmit = async (e) => {
@@ -50,11 +54,9 @@ export default function Record({ session, setPage }) {
     if (videoFile) {
       const ext = videoFile.name.split('.').pop() || 'mp4'
       const path = `${session.user.id}/${Date.now()}.${ext}`
-      console.log('uploading video:', { name: videoFile.name, size: videoFile.size, type: videoFile.type, path })
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('pitch-videos')
-        .upload(path, videoFile, { contentType: videoFile.type || 'video/mp4' })
-      console.log('upload result:', { uploadData, uploadError })
+        .upload(path, videoFile.blob, { contentType: videoFile.type })
       if (uploadError) {
         setVideoError(`動画のアップロードに失敗しました: ${uploadError.message}`)
         setLoading(false)
@@ -196,7 +198,7 @@ export default function Record({ session, setPage }) {
           {videoPreview ? (
             <div className="space-y-2">
               <video src={videoPreview} controls className="w-full rounded-lg max-h-48 bg-black" />
-              <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoError('') }}
+                      <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoError('') }}
                 className="text-sm text-red-400 hover:text-red-600">
                 動画を削除
               </button>
