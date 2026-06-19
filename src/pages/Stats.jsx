@@ -197,19 +197,14 @@ function EditModal({ record, session, onClose, onSave }) {
                 </div>
               </div>
             ) : !record.video_url && todayVideoCount >= VIDEO_DAILY_LIMIT ? (
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-4">
-                <span className="text-2xl mb-1">🚫</span>
-                <span className="text-sm text-gray-400">本日の動画上限（{VIDEO_DAILY_LIMIT}件）に達しました</span>
-              </div>
+              <p className="text-sm text-gray-400 bg-gray-50 rounded-lg px-3 py-2">本日の動画上限（{VIDEO_DAILY_LIMIT}件）に達しました</p>
             ) : (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-4 hover:border-green-400 transition-colors bg-transparent"
+                className="text-sm text-blue-500 hover:text-blue-700 px-3 py-2 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
               >
-                <span className="text-2xl mb-1">🎥</span>
-                <span className="text-sm text-gray-500">タップして動画を選択</span>
-                <span className="text-xs text-gray-400 mt-0.5">50MB以内</span>
+                🎥 動画を追加
               </button>
             )}
             {videoReading && (
