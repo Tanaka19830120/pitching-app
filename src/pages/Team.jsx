@@ -4,10 +4,10 @@ import { supabase } from '../supabase'
 
 const LEVELS = [
   { level: 1, name: 'ルーキー', minXp: 0, color: 'bg-gray-400' },
-  { level: 2, name: 'セミプロ', minXp: 100, color: 'bg-blue-400' },
-  { level: 3, name: 'エース', minXp: 300, color: 'bg-green-500' },
-  { level: 4, name: 'エリート', minXp: 700, color: 'bg-yellow-500' },
-  { level: 5, name: 'レジェンド', minXp: 1500, color: 'bg-purple-500' },
+  { level: 2, name: 'セミプロ', minXp: 500, color: 'bg-blue-400' },
+  { level: 3, name: 'エース', minXp: 2000, color: 'bg-green-500' },
+  { level: 4, name: 'エリート', minXp: 5000, color: 'bg-yellow-500' },
+  { level: 5, name: 'レジェンド', minXp: 10000, color: 'bg-purple-500' },
 ]
 
 const MEMBER_COLORS = [
