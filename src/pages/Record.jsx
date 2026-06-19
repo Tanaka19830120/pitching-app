@@ -32,8 +32,8 @@ export default function Record({ session, setPage }) {
     const file = e.target.files[0]
     if (!file) return
     setVideoError('')
-    if (file.size > 50 * 1024 * 1024) {
-      setVideoError('動画が50MBを超えています。短く撮り直すか、圧縮してください。')
+    if (file.size > 200 * 1024 * 1024) {
+      setVideoError('動画が200MBを超えています。短く撮り直すか、圧縮してください。')
       return
     }
     setVideoFile(file)
@@ -205,7 +205,7 @@ export default function Record({ session, setPage }) {
             <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-6 cursor-pointer hover:border-green-400 transition-colors">
               <span className="text-3xl mb-2">🎥</span>
               <span className="text-sm text-gray-500">タップして動画を選択</span>
-              <span className="text-xs text-gray-400 mt-1">MP4・MOV など（50MB以内）</span>
+              <span className="text-xs text-gray-400 mt-1">MP4・MOV など（200MB以内）</span>
               <input type="file" accept="video/*" onChange={handleVideoChange} className="hidden" />
             </label>
           )}
