@@ -4,6 +4,8 @@ import { supabase } from '../supabase'
 
 const PITCH_TYPES = ['ストレート', 'チェンジアップ', 'ライズボール', 'ドロップ', 'カーブ', 'スクリュー']
 
+const VIDEO_DAILY_LIMIT = 3
+
 function EditModal({ record, session, onClose, onSave }) {
   const [form, setForm] = useState({
     practiced_at: record.practiced_at,
@@ -18,8 +20,22 @@ function EditModal({ record, session, onClose, onSave }) {
   const [videoPreview, setVideoPreview] = useState(record.video_url || null)
   const [videoError, setVideoError] = useState('')
   const [videoReading, setVideoReading] = useState(false)
+  const [todayVideoCount, setTodayVideoCount] = useState(0)
   const [saving, setSaving] = useState(false)
   const fileInputRef = useRef(null)
+
+  useEffect(() => {
+    // 元々動画がない記録に新規追加する場合のみ上限チェックが必要
+    if (!record.video_url) {
+      const today = new Date().toISOString().split('T')[0]
+      supabase.from('pitch_records')
+        .select('id', { count: 'exact' })
+        .eq('user_id', session.user.id)
+        .eq('practiced_at', today)
+        .not('video_url', 'is', null)
+        .then(({ count }) => setTodayVideoCount(count || 0))
+    }
+  }, [])
 
   const set = (key, value) => setForm(f => ({ ...f, [key]: value }))
 
@@ -134,7 +150,14 @@ function EditModal({ record, session, onClose, onSave }) {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">フォーム動画</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">フォーム動画</label>
+              {!record.video_url && (
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${todayVideoCount >= VIDEO_DAILY_LIMIT ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
+                  本日 {todayVideoCount}/{VIDEO_DAILY_LIMIT}
+                </span>
+              )}
+            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -173,6 +196,11 @@ function EditModal({ record, session, onClose, onSave }) {
                     className="text-sm text-red-400 hover:text-red-600">動画を削除</button>
                 </div>
               </div>
+            ) : !record.video_url && todayVideoCount >= VIDEO_DAILY_LIMIT ? (
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-4">
+                <span className="text-2xl mb-1">🚫</span>
+                <span className="text-sm text-gray-400">本日の動画上限（{VIDEO_DAILY_LIMIT}件）に達しました</span>
+              </div>
             ) : (
               <button
                 type="button"
@@ -192,10 +220,16 @@ function EditModal({ record, session, onClose, onSave }) {
             )}
           </div>
         </div>
-        <button onClick={handleSave} disabled={saving || videoReading}
-          className="w-full mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
-          {videoReading ? '動画準備中...' : saving ? '保存中...' : '保存する'}
-        </button>
+        <div className="flex gap-3 mt-4">
+          <button onClick={onClose} disabled={saving}
+            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
+            キャンセル
+          </button>
+          <button onClick={handleSave} disabled={saving || videoReading}
+            className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
+            {videoReading ? '動画準備中...' : saving ? '保存中...' : '保存する'}
+          </button>
+        </div>
       </div>
     </div>
   )
