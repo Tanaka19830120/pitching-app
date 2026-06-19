@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
 const PITCH_TYPES = ['ストレート', 'チェンジアップ', 'ライズボール', 'ドロップ', 'カーブ', 'スクリュー']
+const VIDEO_DAILY_LIMIT = 3
 
 export default function Record({ session, setPage }) {
   const [form, setForm] = useState({
@@ -17,8 +18,19 @@ export default function Record({ session, setPage }) {
   const [videoPreview, setVideoPreview] = useState(null)
   const [videoError, setVideoError] = useState('')
   const [videoReading, setVideoReading] = useState(false)
+  const [todayVideoCount, setTodayVideoCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0]
+    supabase.from('pitch_records')
+      .select('id', { count: 'exact' })
+      .eq('user_id', session.user.id)
+      .eq('practiced_at', today)
+      .not('video_url', 'is', null)
+      .then(({ count }) => setTodayVideoCount(count || 0))
+  }, [])
 
   const set = (key, value) => setForm(f => ({ ...f, [key]: value }))
 
@@ -203,11 +215,21 @@ export default function Record({ session, setPage }) {
 
         {/* 動画アップロード */}
         <div className="bg-white rounded-2xl shadow-sm p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">フォーム動画（任意）</label>
-          {videoPreview ? (
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">フォーム動画（任意）</label>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${todayVideoCount >= VIDEO_DAILY_LIMIT ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
+              本日 {todayVideoCount}/{VIDEO_DAILY_LIMIT}
+            </span>
+          </div>
+          {todayVideoCount >= VIDEO_DAILY_LIMIT && !videoPreview ? (
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-6">
+              <span className="text-3xl mb-2">🚫</span>
+              <span className="text-sm text-gray-400">本日の動画アップロード上限（{VIDEO_DAILY_LIMIT}件）に達しました</span>
+            </div>
+          ) : videoPreview ? (
             <div className="space-y-2">
               <video src={videoPreview} controls className="w-full rounded-lg max-h-48 bg-black" />
-                      <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoError('') }}
+              <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoError('') }}
                 className="text-sm text-red-400 hover:text-red-600">
                 動画を削除
               </button>
