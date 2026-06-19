@@ -225,7 +225,11 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
     if (!confirm('この記録を削除しますか？')) return
     setDeletingId(id)
     await supabase.from('pitch_records').delete().eq('id', id)
-    setRecords(prev => prev.filter(r => r.id !== id))
+    const newRecords = records.filter(r => r.id !== id)
+    setRecords(newRecords)
+    // 残った記録から合計を再計算してprofilesを更新
+    const newTotal = newRecords.reduce((sum, r) => sum + (r.total_pitches || 0), 0)
+    await supabase.from('profiles').update({ total_pitches: newTotal }).eq('id', session.user.id)
     setDeletingId(null)
   }
 
