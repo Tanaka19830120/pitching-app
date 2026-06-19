@@ -36,7 +36,7 @@ export default function Record({ session, setPage }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.max_speed || !form.total_pitches) return
+    if (!form.total_pitches) return
     setLoading(true)
 
     // 動画アップロード
@@ -59,7 +59,7 @@ export default function Record({ session, setPage }) {
     const { error } = await supabase.from('pitch_records').insert({
       user_id: session.user.id,
       practiced_at: form.practiced_at,
-      max_speed: Number(form.max_speed),
+      max_speed: form.max_speed ? Number(form.max_speed) : null,
       avg_speed: form.avg_speed ? Number(form.avg_speed) : null,
       total_pitches: Number(form.total_pitches),
       strike_count: form.strike_count ? Number(form.strike_count) : 0,
@@ -125,9 +125,9 @@ export default function Record({ session, setPage }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">最速 (km/h) <span className="text-red-400">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">最速 (km/h)</label>
               <input type="number" value={form.max_speed} onChange={e => set('max_speed', e.target.value)}
-                required placeholder="例: 85" min="1" max="200"
+                placeholder="例: 85" min="1" max="200"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
             </div>
             <div>
