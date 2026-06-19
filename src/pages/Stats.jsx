@@ -5,6 +5,19 @@ import { supabase } from '../supabase'
 const PITCH_TYPES = ['ストレート', 'チェンジアップ', 'ライズボール', 'ドロップ', 'カーブ', 'スクリュー']
 const VIDEO_DAILY_LIMIT = 3
 
+function getStoragePath(url) {
+  const marker = '/pitch-videos/'
+  const idx = url.indexOf(marker)
+  return idx !== -1 ? url.slice(idx + marker.length) : null
+}
+
+async function deleteVideosFromStorage(urls) {
+  const paths = (urls || []).map(getStoragePath).filter(Boolean)
+  if (paths.length > 0) {
+    await supabase.storage.from('pitch-videos').remove(paths)
+  }
+}
+
 function EditModal({ record, session, onClose, onSave }) {
   const [form, setForm] = useState({
     practiced_at: record.practiced_at,
@@ -188,7 +201,10 @@ function EditModal({ record, session, onClose, onSave }) {
             {videoUrls.map((url, i) => (
               <div key={url} className="mb-2 space-y-1">
                 <video src={url} controls playsInline className="w-full rounded-lg max-h-40 bg-black" />
-                <button type="button" onClick={() => setVideoUrls(prev => prev.filter((_, idx) => idx !== i))}
+                <button type="button" onClick={async () => {
+                  await deleteVideosFromStorage([url])
+                  setVideoUrls(prev => prev.filter((_, idx) => idx !== i))
+                }}
                   className="text-xs text-red-400 hover:text-red-600">動画 {i + 1} を削除</button>
               </div>
             ))}
@@ -261,6 +277,8 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
   async function handleDelete(id) {
     if (!confirm('この記録を削除しますか？')) return
     setDeletingId(id)
+    const target = records.find(r => r.id === id)
+    await deleteVideosFromStorage(target?.video_urls)
     await supabase.from('pitch_records').delete().eq('id', id)
     const newRecords = records.filter(r => r.id !== id)
     setRecords(newRecords)
