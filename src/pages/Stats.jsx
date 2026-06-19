@@ -262,6 +262,11 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
                   {r.memo}
                 </div>
               )}
+              {r.video_url && (
+                <div className="mt-2 ml-16">
+                  <video src={r.video_url} controls className="w-full rounded-xl max-h-52 bg-black" />
+                </div>
+              )}
             </div>
           ))}
         </div>

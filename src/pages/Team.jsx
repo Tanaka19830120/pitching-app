@@ -28,14 +28,28 @@ export default function Team({ session, setPage }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [chartData, setChartData] = useState([])
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
 
   useEffect(() => {
     fetchRanking()
   }, [])
 
+  async function handleDeleteMember(e, memberId, memberName) {
+    e.stopPropagation()
+    if (!confirm(`「${memberName}」さんをチームから削除しますか？\nこの操作は取り消せません。`)) return
+    setDeletingId(memberId)
+    await supabase.from('profiles').delete().eq('id', memberId)
+    setMembers(prev => prev.filter(m => m.id !== memberId))
+    setDeletingId(null)
+  }
+
   async function fetchRanking() {
     const { data: profiles } = await supabase.from('profiles').select('*')
     if (!profiles) { setLoading(false); return }
+
+    const me = profiles.find(p => p.id === session.user.id)
+    setIsAdmin(me?.is_admin || false)
 
     const enriched = await Promise.all(profiles.map(async p => {
       const { data: records } = await supabase
@@ -180,6 +194,15 @@ export default function Team({ session, setPage }) {
                   <div className="font-bold text-lg" style={{ color }}>{getValue(m)}</div>
                   <div className="text-xs text-gray-300 mt-0.5">タップで詳細 →</div>
                 </div>
+                {isAdmin && !isMe && (
+                  <button
+                    onClick={(e) => handleDeleteMember(e, m.id, m.display_name)}
+                    disabled={deletingId === m.id}
+                    className="ml-1 text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 shrink-0 disabled:opacity-40"
+                  >
+                    削除
+                  </button>
+                )}
               </div>
             )
           })}
