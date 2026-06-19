@@ -15,6 +15,7 @@ export default function Record({ session, setPage }) {
   })
   const [videoFile, setVideoFile] = useState(null)
   const [videoPreview, setVideoPreview] = useState(null)
+  const [videoError, setVideoError] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
 
@@ -30,6 +31,11 @@ export default function Record({ session, setPage }) {
   const handleVideoChange = (e) => {
     const file = e.target.files[0]
     if (!file) return
+    setVideoError('')
+    if (file.size > 50 * 1024 * 1024) {
+      setVideoError('動画が50MBを超えています。短く撮り直すか、圧縮してください。')
+      return
+    }
     setVideoFile(file)
     setVideoPreview(URL.createObjectURL(file))
   }
@@ -47,10 +53,13 @@ export default function Record({ session, setPage }) {
       const { error: uploadError } = await supabase.storage
         .from('pitch-videos')
         .upload(path, videoFile, { contentType: videoFile.type })
-      if (!uploadError) {
-        const { data } = supabase.storage.from('pitch-videos').getPublicUrl(path)
-        videoUrl = data.publicUrl
+      if (uploadError) {
+        setVideoError(`動画のアップロードに失敗しました: ${uploadError.message}`)
+        setLoading(false)
+        return
       }
+      const { data } = supabase.storage.from('pitch-videos').getPublicUrl(path)
+      videoUrl = data.publicUrl
     }
 
     const strikeRate = form.total_pitches ? (form.strike_count / form.total_pitches) : 0
@@ -184,7 +193,7 @@ export default function Record({ session, setPage }) {
           {videoPreview ? (
             <div className="space-y-2">
               <video src={videoPreview} controls className="w-full rounded-lg max-h-48 bg-black" />
-              <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null) }}
+              <button type="button" onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoError('') }}
                 className="text-sm text-red-400 hover:text-red-600">
                 動画を削除
               </button>
@@ -193,9 +202,12 @@ export default function Record({ session, setPage }) {
             <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-6 cursor-pointer hover:border-green-400 transition-colors">
               <span className="text-3xl mb-2">🎥</span>
               <span className="text-sm text-gray-500">タップして動画を選択</span>
-              <span className="text-xs text-gray-400 mt-1">MP4・MOV など</span>
+              <span className="text-xs text-gray-400 mt-1">MP4・MOV など（50MB以内）</span>
               <input type="file" accept="video/*" onChange={handleVideoChange} className="hidden" />
             </label>
+          )}
+          {videoError && (
+            <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 mt-2">{videoError}</p>
           )}
         </div>
 
