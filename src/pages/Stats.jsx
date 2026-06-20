@@ -271,17 +271,20 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
   const [loading, setLoading] = useState(true)
   const [editingRecord, setEditingRecord] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => { fetchRecords() }, [targetUserId])
 
   async function fetchRecords() {
     setLoading(true)
-    const [{ data }, { data: profile }] = await Promise.all([
+    const [{ data }, { data: profile }, { data: me }] = await Promise.all([
       supabase.from('pitch_records').select('*').eq('user_id', targetUserId).order('practiced_at', { ascending: true }),
       supabase.from('profiles').select('display_name').eq('id', targetUserId).single(),
+      supabase.from('profiles').select('is_admin').eq('id', session.user.id).single(),
     ])
     setRecords(data || [])
     setProfileName(profile?.display_name || '')
+    setIsAdmin(me?.is_admin || false)
     setLoading(false)
   }
 
@@ -393,7 +396,7 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
                 <div className="text-sm text-gray-400 flex-1">
                   {r.total_pitches}球 / {r.total_pitches ? `${Math.round((r.strike_count / r.total_pitches) * 100)}%` : '-'}
                 </div>
-                {isOwn && (
+                {(isOwn || isAdmin) && (
                   <>
                     <button onClick={() => setEditingRecord(r)}
                       className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 shrink-0">
