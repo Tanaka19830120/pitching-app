@@ -280,11 +280,11 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
     const [{ data }, { data: profile }, { data: me }] = await Promise.all([
       supabase.from('pitch_records').select('*').eq('user_id', targetUserId).order('practiced_at', { ascending: true }),
       supabase.from('profiles').select('display_name').eq('id', targetUserId).single(),
-      supabase.from('profiles').select('is_admin').eq('id', session.user.id).single(),
+      supabase.from('profiles').select('*').eq('id', session.user.id).single(),
     ])
     setRecords(data || [])
     setProfileName(profile?.display_name || '')
-    setIsAdmin(me?.is_admin || false)
+    setIsAdmin(me?.is_admin === true)
     setLoading(false)
   }
 
@@ -305,12 +305,22 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
 
   if (records.length === 0) {
     return (
-      <div className="p-6 text-center pt-20">
+      <div className="p-6 pt-6 max-w-lg mx-auto">
         {!isOwn && (
-          <button onClick={() => setPage('team')} className="text-green-600 text-sm mb-6 block mx-auto">← チームに戻る</button>
+          <button onClick={() => setPage('team')} className="text-green-600 text-sm mb-4 block">← チームに戻る</button>
         )}
-        <div className="text-5xl mb-4">📊</div>
-        <p className="text-gray-500">{isOwn ? '記録がまだありません。' : `${profileName}さんの記録はまだありません。`}</p>
+        {isAdmin && !isOwn && (
+          <div className="flex justify-end mb-4">
+            <button onClick={() => setPage('record', targetUserId)}
+              className="text-sm bg-green-500 text-white font-bold px-3 py-1.5 rounded-lg">
+              ＋ 記録追加
+            </button>
+          </div>
+        )}
+        <div className="text-center pt-10">
+          <div className="text-5xl mb-4">📊</div>
+          <p className="text-gray-500">{isOwn ? '記録がまだありません。' : `${profileName}さんの記録はまだありません。`}</p>
+        </div>
       </div>
     )
   }
