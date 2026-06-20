@@ -46,7 +46,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-green-100 pb-20">
       {page === 'home' && <Home session={session} setPage={navigateTo} />}
-      {page === 'record' && <Record session={session} setPage={navigateTo} />}
+      {page === 'record' && <Record session={session} targetUserId={targetUserId} setPage={navigateTo} />}
       {page === 'stats' && (
         <Stats
           session={session}

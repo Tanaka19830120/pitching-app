@@ -333,9 +333,17 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
           ← チームに戻る
         </button>
       )}
-      <h1 className="text-xl font-bold text-gray-800 mb-4 pt-1">
-        {isOwn ? 'あなたの統計' : `${profileName}さんの統計`}
-      </h1>
+      <div className="flex items-center justify-between mb-4 pt-1">
+        <h1 className="text-xl font-bold text-gray-800">
+          {isOwn ? 'あなたの統計' : `${profileName}さんの統計`}
+        </h1>
+        {isAdmin && !isOwn && (
+          <button onClick={() => setPage('record', targetUserId)}
+            className="text-sm bg-green-500 text-white font-bold px-3 py-1.5 rounded-lg">
+            ＋ 記録追加
+          </button>
+        )}
+      </div>
 
       {/* サマリー */}
       <div className="grid grid-cols-3 gap-3 mb-4">

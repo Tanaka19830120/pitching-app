@@ -4,7 +4,9 @@ import { supabase } from '../supabase'
 const PITCH_TYPES = ['ストレート', 'チェンジアップ', 'ライズボール', 'ドロップ', 'カーブ', 'スクリュー']
 const VIDEO_DAILY_LIMIT = 3
 
-export default function Record({ session, setPage }) {
+export default function Record({ session, targetUserId: propTargetUserId, setPage }) {
+  const targetUserId = propTargetUserId || session.user.id
+  const isForOther = targetUserId !== session.user.id
   const [form, setForm] = useState({
     practiced_at: new Date().toISOString().split('T')[0],
     max_speed: '',
@@ -25,7 +27,7 @@ export default function Record({ session, setPage }) {
     const today = new Date().toISOString().split('T')[0]
     supabase.from('pitch_records')
       .select('video_urls')
-      .eq('user_id', session.user.id)
+      .eq('user_id', targetUserId)
       .eq('practiced_at', today)
       .then(({ data }) => {
         const total = (data || []).reduce((sum, r) => sum + (r.video_urls?.length || 0), 0)
@@ -97,7 +99,7 @@ export default function Record({ session, setPage }) {
     const xpGained = Math.floor(Number(form.total_pitches) * (1 + strikeRate))
 
     const { error } = await supabase.from('pitch_records').insert({
-      user_id: session.user.id,
+      user_id: targetUserId,
       practiced_at: form.practiced_at,
       max_speed: form.max_speed ? Number(form.max_speed) : null,
       avg_speed: form.avg_speed ? Number(form.avg_speed) : null,
@@ -113,7 +115,7 @@ export default function Record({ session, setPage }) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('total_pitches, streak_days, last_practiced_at')
-        .eq('id', session.user.id)
+        .eq('id', targetUserId)
         .single()
 
       const today = form.practiced_at
@@ -127,7 +129,7 @@ export default function Record({ session, setPage }) {
         total_pitches: (profile?.total_pitches || 0) + Number(form.total_pitches),
         streak_days: isConsecutive ? (profile?.streak_days || 0) + 1 : 1,
         last_practiced_at: today,
-      }).eq('id', session.user.id)
+      }).eq('id', targetUserId)
 
       setDone(true)
     }
@@ -140,8 +142,9 @@ export default function Record({ session, setPage }) {
         <div className="text-6xl mb-4">🎉</div>
         <h2 className="text-2xl font-bold text-gray-800 mb-2">記録完了！</h2>
         <p className="text-gray-500 mb-6">ナイスピッチング！</p>
-        <button onClick={() => setPage('home')} className="bg-green-500 text-white font-bold py-3 px-8 rounded-full">
-          ホームに戻る
+        <button onClick={() => setPage(isForOther ? 'stats' : 'home', isForOther ? targetUserId : null)}
+          className="bg-green-500 text-white font-bold py-3 px-8 rounded-full">
+          {isForOther ? '統計に戻る' : 'ホームに戻る'}
         </button>
       </div>
     )
@@ -156,7 +159,9 @@ export default function Record({ session, setPage }) {
 
   return (
     <div className="p-4 max-w-lg mx-auto">
-      <h1 className="text-xl font-bold text-gray-800 mb-4 pt-2">練習記録を入力</h1>
+      <h1 className="text-xl font-bold text-gray-800 mb-4 pt-2">
+        {isForOther ? '代理入力：練習記録' : '練習記録を入力'}
+      </h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
