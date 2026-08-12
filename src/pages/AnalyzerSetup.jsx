@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { VIDEO_LIMITS, validateTrimRange, validateVideoFile } from '../domain/analyzer/videoValidation'
 import { createPoseAdapter } from '../infrastructure/mediapipe/poseAdapter'
 import PoseOverlay from '../components/analyzer/PoseOverlay'
+import AnalysisResultPanel from '../components/analyzer/AnalysisResultPanel'
+import { analyzePoseFrames } from '../domain/analyzer/poseAnalysis'
 
 const STEPS = ['動画', '範囲', '被写体', '投球情報']
 const DEFAULT_CONFIG = {
@@ -35,6 +37,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
   const [progress, setProgress] = useState(0)
   const [poseFrames, setPoseFrames] = useState([])
   const [currentPose, setCurrentPose] = useState(null)
+  const [analysisResult, setAnalysisResult] = useState(null)
   const abortRef = useRef(null)
 
   useEffect(() => {
@@ -143,6 +146,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
     setProgress(0)
     setPoseFrames([])
     setCurrentPose(null)
+    setAnalysisResult(null)
     setAnalysisState('loadingModel')
     const controller = new AbortController()
     abortRef.current = controller
@@ -164,6 +168,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
         },
       })
       setPoseFrames(frames)
+      setAnalysisResult(analyzePoseFrames(frames, config))
       const lastDetected = [...frames].reverse().find(frame => frame.landmarks?.[0])
       setCurrentPose(lastDetected?.landmarks?.[0] || null)
       setAnalysisState('completed')
@@ -182,6 +187,20 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
 
   function cancelAnalysis() {
     abortRef.current?.abort()
+  }
+
+  function jumpToEvent(event) {
+    if (!event || !videoRef.current) return
+    videoRef.current.currentTime = event.timeMs / 1000
+    const frame = poseFrames.find(item => item.frameIndex === event.frameIndex)
+    setCurrentPose(frame?.landmarks?.[0] || null)
+  }
+
+  function handleVideoTimeUpdate(event) {
+    if (!poseFrames.length) return
+    const timeMs = event.currentTarget.currentTime * 1000
+    const nearest = poseFrames.reduce((best, frame) => Math.abs(frame.timeMs - timeMs) < Math.abs(best.timeMs - timeMs) ? frame : best, poseFrames[0])
+    setCurrentPose(nearest.landmarks?.[0] || null)
   }
 
   return (
@@ -292,7 +311,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
       {videoUrl && (
         <div className="bg-white rounded-2xl shadow-sm p-3 mb-4">
           <div className="relative overflow-hidden rounded-xl bg-black">
-            <video ref={videoRef} src={videoUrl} crossOrigin="anonymous" onLoadedMetadata={handleLoadedMetadata} controls playsInline className="w-full max-h-64 block" />
+            <video ref={videoRef} src={videoUrl} crossOrigin="anonymous" onLoadedMetadata={handleLoadedMetadata} onTimeUpdate={handleVideoTimeUpdate} controls playsInline className="w-full max-h-64 block" />
             <PoseOverlay landmarks={currentPose} />
           </div>
           {metadata && (
@@ -342,6 +361,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
             </div>
           )}
           {analysisState === 'cancelled' && <p className="mt-3 text-sm text-gray-600 bg-gray-100 rounded-xl p-3">解析をキャンセルしました。設定を変えて再実行できます。</p>}
+          {analysisResult && <AnalysisResultPanel result={analysisResult} onJumpToEvent={jumpToEvent} />}
         </>
       )}
 

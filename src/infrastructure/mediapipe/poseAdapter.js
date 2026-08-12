@@ -35,7 +35,7 @@ function normalizeLandmark(point) {
     y: point.y,
     z: point.z,
     visibility: point.visibility ?? 0,
-    presence: point.presence ?? 0,
+    presence: point.presence ?? point.visibility ?? 0,
   }
 }
 
