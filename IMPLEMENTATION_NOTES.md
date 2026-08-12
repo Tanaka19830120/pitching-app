@@ -31,3 +31,9 @@
 - 同期推論による画面停止を軽減するため、3フレームごとにUIへ制御を返す。
 - 進捗、キャンセル、再解析、検出フレーム数、骨格オーバーレイを追加した。
 - Web Worker化は端末実測後のPhase 2後続作業とする。
+
+## 2026-08-12: Supabase動画のcross-origin解析対応
+
+- Supabase Storageの公開URLをvideo要素から直接解析すると、WebGLがcross-origin映像を拒否した。
+- 登録済み動画をCORS付きfetchで端末へ取得し、Blob URLへ変換してからMediaPipeへ渡す方式へ変更した。
+- 作成したBlob URLは画面破棄時に解放し、解析動画を別の外部サービスへ送信しない。

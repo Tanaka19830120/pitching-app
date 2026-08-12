@@ -23,8 +23,9 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
   const videoRef = useRef(null)
   const [step, setStep] = useState(sourceVideo ? 1 : 0)
   const [file, setFile] = useState(null)
-  const [videoUrl, setVideoUrl] = useState(sourceVideo?.url || '')
+  const [videoUrl, setVideoUrl] = useState('')
   const [isObjectUrl, setIsObjectUrl] = useState(false)
+  const [sourceLoading, setSourceLoading] = useState(Boolean(sourceVideo))
   const [metadata, setMetadata] = useState(null)
   const [trim, setTrim] = useState({ start: 0, end: 0 })
   const [crop, setCrop] = useState({ x: 0, y: 0, width: 100, height: 100 })
@@ -35,6 +36,34 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
   const [poseFrames, setPoseFrames] = useState([])
   const [currentPose, setCurrentPose] = useState(null)
   const abortRef = useRef(null)
+
+  useEffect(() => {
+    if (!sourceVideo?.url) return undefined
+    const controller = new AbortController()
+
+    async function loadSavedVideo() {
+      setSourceLoading(true)
+      setError('')
+      try {
+        const response = await fetch(sourceVideo.url, { signal: controller.signal, mode: 'cors' })
+        if (!response.ok) throw new Error(`動画の取得に失敗しました（${response.status}）`)
+        const blob = await response.blob()
+        if (!blob.type.startsWith('video/')) throw new Error('保存されているファイルを動画として読み込めませんでした。')
+        const localUrl = URL.createObjectURL(blob)
+        setVideoUrl(localUrl)
+        setIsObjectUrl(true)
+      } catch (caught) {
+        if (caught?.name !== 'AbortError') {
+          setError(`登録済み動画を読み込めませんでした: ${caught?.message || '不明なエラー'}`)
+        }
+      } finally {
+        if (!controller.signal.aborted) setSourceLoading(false)
+      }
+    }
+
+    loadSavedVideo()
+    return () => controller.abort()
+  }, [sourceVideo])
 
   useEffect(() => () => {
     if (videoUrl && isObjectUrl) URL.revokeObjectURL(videoUrl)
@@ -175,6 +204,14 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
         </div>
       )}
 
+      {sourceLoading && (
+        <div className="bg-white rounded-2xl shadow-sm p-5 mb-4 text-center">
+          <div className="inline-block w-7 h-7 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-2" />
+          <p className="text-sm font-bold text-blue-800">登録済み動画を端末へ読み込み中...</p>
+          <p className="text-xs text-gray-500 mt-1">解析処理は読み込み後、この端末内で行います。</p>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
         {step === 0 && (
           <section>
@@ -255,7 +292,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
       {videoUrl && (
         <div className="bg-white rounded-2xl shadow-sm p-3 mb-4">
           <div className="relative overflow-hidden rounded-xl bg-black">
-            <video ref={videoRef} src={videoUrl} onLoadedMetadata={handleLoadedMetadata} controls playsInline className="w-full max-h-64 block" />
+            <video ref={videoRef} src={videoUrl} crossOrigin="anonymous" onLoadedMetadata={handleLoadedMetadata} controls playsInline className="w-full max-h-64 block" />
             <PoseOverlay landmarks={currentPose} />
           </div>
           {metadata && (
