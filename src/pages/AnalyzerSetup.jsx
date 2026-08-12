@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { VIDEO_LIMITS, validateTrimRange, validateVideoFile } from '../domain/analyzer/videoValidation'
+import { createPoseAdapter } from '../infrastructure/mediapipe/poseAdapter'
+import PoseOverlay from '../components/analyzer/PoseOverlay'
 
 const STEPS = ['動画', '範囲', '被写体', '投球情報']
 const DEFAULT_CONFIG = {
@@ -28,6 +30,11 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
   const [crop, setCrop] = useState({ x: 0, y: 0, width: 100, height: 100 })
   const [config, setConfig] = useState(DEFAULT_CONFIG)
   const [error, setError] = useState('')
+  const [analysisState, setAnalysisState] = useState('idle')
+  const [progress, setProgress] = useState(0)
+  const [poseFrames, setPoseFrames] = useState([])
+  const [currentPose, setCurrentPose] = useState(null)
+  const abortRef = useRef(null)
 
   useEffect(() => () => {
     if (videoUrl && isObjectUrl) URL.revokeObjectURL(videoUrl)
@@ -99,6 +106,53 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
     if (step === 0) setPage(sourceVideo ? 'stats' : 'analyzer', sourceVideo?.ownerUserId || null)
     else if (step === 1 && sourceVideo) setPage('stats', sourceVideo.ownerUserId)
     else setStep(current => current - 1)
+  }
+
+  async function startAnalysis() {
+    if (!videoRef.current || !trimValidation.valid) return
+    setError('')
+    setProgress(0)
+    setPoseFrames([])
+    setCurrentPose(null)
+    setAnalysisState('loadingModel')
+    const controller = new AbortController()
+    abortRef.current = controller
+    let adapter
+
+    try {
+      adapter = await createPoseAdapter()
+      if (controller.signal.aborted) return
+      setAnalysisState('extracting')
+      const frames = await adapter.analyzeVideo({
+        video: videoRef.current,
+        startSeconds: trim.start,
+        endSeconds: trim.end,
+        fps: metadata?.estimatedFps || 30,
+        signal: controller.signal,
+        onProgress: setProgress,
+        onFrame: frame => {
+          if (frame.frameIndex % 5 === 0 || frame.landmarks?.[0]) setCurrentPose(frame.landmarks?.[0] || null)
+        },
+      })
+      setPoseFrames(frames)
+      const lastDetected = [...frames].reverse().find(frame => frame.landmarks?.[0])
+      setCurrentPose(lastDetected?.landmarks?.[0] || null)
+      setAnalysisState('completed')
+    } catch (caught) {
+      if (caught?.name === 'AbortError') {
+        setAnalysisState('cancelled')
+      } else {
+        setError(`骨格解析に失敗しました: ${caught?.message || '不明なエラー'}`)
+        setAnalysisState('failed')
+      }
+    } finally {
+      adapter?.close()
+      abortRef.current = null
+    }
+  }
+
+  function cancelAnalysis() {
+    abortRef.current?.abort()
   }
 
   return (
@@ -200,7 +254,10 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
 
       {videoUrl && (
         <div className="bg-white rounded-2xl shadow-sm p-3 mb-4">
-          <video ref={videoRef} src={videoUrl} onLoadedMetadata={handleLoadedMetadata} controls playsInline className="w-full max-h-64 rounded-xl bg-black" />
+          <div className="relative overflow-hidden rounded-xl bg-black">
+            <video ref={videoRef} src={videoUrl} onLoadedMetadata={handleLoadedMetadata} controls playsInline className="w-full max-h-64 block" />
+            <PoseOverlay landmarks={currentPose} />
+          </div>
           {metadata && (
             <div className="mt-2">
               <div className="flex justify-center gap-2 mb-2">
@@ -221,7 +278,34 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
       {step < STEPS.length - 1 ? (
         <button onClick={next} className="w-full min-h-12 rounded-2xl bg-blue-600 text-white font-bold">次へ</button>
       ) : (
-        <button disabled className="w-full min-h-12 rounded-2xl bg-blue-600 text-white font-bold opacity-60">解析開始（骨格解析は次のPhaseで追加）</button>
+        <>
+          {(analysisState === 'loadingModel' || analysisState === 'extracting') ? (
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="font-bold text-blue-700">{analysisState === 'loadingModel' ? 'モデルを準備中' : '骨格を抽出中'}</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-3">
+                <div className="h-full bg-blue-600 transition-all" style={{ width: `${progress}%` }} />
+              </div>
+              <button type="button" onClick={cancelAnalysis} className="w-full min-h-11 rounded-xl border border-gray-300 text-gray-600 font-bold">キャンセル</button>
+            </div>
+          ) : (
+            <button onClick={startAnalysis} className="w-full min-h-12 rounded-2xl bg-blue-600 text-white font-bold">
+              {analysisState === 'completed' ? 'もう一度解析する' : '解析開始'}
+            </button>
+          )}
+          {analysisState === 'completed' && (
+            <div className="mt-3 bg-green-50 border border-green-100 rounded-2xl p-4">
+              <p className="font-bold text-green-800">骨格解析が完了しました</p>
+              <p className="text-sm text-green-700 mt-1">
+                {poseFrames.length}フレーム中、{poseFrames.filter(frame => frame.landmarks.length > 0).length}フレームで人物を検出しました。
+              </p>
+              <p className="text-xs text-green-700 mt-2">次のPhaseでイベント推定と角度グラフを追加します。</p>
+            </div>
+          )}
+          {analysisState === 'cancelled' && <p className="mt-3 text-sm text-gray-600 bg-gray-100 rounded-xl p-3">解析をキャンセルしました。設定を変えて再実行できます。</p>}
+        </>
       )}
 
       <p className="text-xs text-gray-500 leading-5 mt-4">
