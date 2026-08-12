@@ -4,6 +4,7 @@ import { createPoseAdapter } from '../infrastructure/mediapipe/poseAdapter'
 import PoseOverlay from '../components/analyzer/PoseOverlay'
 import AnalysisResultPanel from '../components/analyzer/AnalysisResultPanel'
 import { analyzePoseFrames } from '../domain/analyzer/poseAnalysis'
+import { makeAnalysisId, saveAnalysis } from '../infrastructure/storage/analysisDb'
 
 const STEPS = ['動画', '範囲', '被写体', '投球情報']
 const DEFAULT_CONFIG = {
@@ -38,6 +39,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
   const [poseFrames, setPoseFrames] = useState([])
   const [currentPose, setCurrentPose] = useState(null)
   const [analysisResult, setAnalysisResult] = useState(null)
+  const [saveMessage, setSaveMessage] = useState('')
   const abortRef = useRef(null)
 
   useEffect(() => {
@@ -168,7 +170,30 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
         },
       })
       setPoseFrames(frames)
-      setAnalysisResult(analyzePoseFrames(frames, config))
+      const result = analyzePoseFrames(frames, config)
+      setAnalysisResult(result)
+      if (sourceVideo?.recordId) {
+        const id = makeAnalysisId(sourceVideo.recordId, sourceVideo.videoIndex, sourceVideo.url)
+        try {
+          await saveAnalysis({
+            id,
+            schemaVersion: '1.0.0',
+            createdAt: new Date().toISOString(),
+            recordId: sourceVideo.recordId,
+            videoIndex: sourceVideo.videoIndex,
+            videoUrl: sourceVideo.url,
+            ownerUserId: sourceVideo.ownerUserId,
+            practicedAt: sourceVideo.practicedAt,
+            config,
+            trim,
+            crop,
+            result,
+          })
+          setSaveMessage('解析結果をこの端末に保存しました。統計一覧からいつでも開けます。')
+        } catch {
+          setSaveMessage('解析は完了しましたが、端末への保存に失敗しました。この画面では結果を確認できます。')
+        }
+      }
       const lastDetected = [...frames].reverse().find(frame => frame.landmarks?.[0])
       setCurrentPose(lastDetected?.landmarks?.[0] || null)
       setAnalysisState('completed')
@@ -362,6 +387,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
           )}
           {analysisState === 'cancelled' && <p className="mt-3 text-sm text-gray-600 bg-gray-100 rounded-xl p-3">解析をキャンセルしました。設定を変えて再実行できます。</p>}
           {analysisResult && <AnalysisResultPanel result={analysisResult} onJumpToEvent={jumpToEvent} />}
+          {saveMessage && <p className="mt-3 text-sm text-blue-700 bg-blue-50 rounded-xl p-3">{saveMessage}</p>}
         </>
       )}
 

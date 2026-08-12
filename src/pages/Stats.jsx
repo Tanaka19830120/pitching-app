@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../supabase'
+import { getAnalysisSummaries, makeAnalysisId } from '../infrastructure/storage/analysisDb'
 
 const PITCH_TYPES = ['ストレート', 'チェンジアップ', 'ライズボール', 'ドロップ', 'カーブ', 'スクリュー']
 const VIDEO_DAILY_LIMIT = 3
@@ -272,6 +273,7 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
   const [editingRecord, setEditingRecord] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [analysisSummaries, setAnalysisSummaries] = useState({})
 
   useEffect(() => { fetchRecords() }, [targetUserId])
 
@@ -285,6 +287,15 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
     setRecords(data || [])
     setProfileName(profile?.display_name || '')
     setIsAdmin(me?.is_admin === true)
+    const videoEntries = (data || []).flatMap(record => {
+      const urls = record.video_urls?.length ? record.video_urls : record.video_url ? [record.video_url] : []
+      return urls.map((videoUrl, videoIndex) => ({ recordId: record.id, videoIndex, videoUrl }))
+    })
+    try {
+      setAnalysisSummaries(await getAnalysisSummaries(videoEntries))
+    } catch {
+      setAnalysisSummaries({})
+    }
     setLoading(false)
   }
 
@@ -463,6 +474,28 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
                             動画{urls.length > 1 ? ` ${i + 1}` : ''}を開く
                           </a>
                         </div>
+                        {(() => {
+                          const analysisId = makeAnalysisId(r.id, i, url)
+                          const saved = analysisSummaries[analysisId]
+                          if (!saved) return null
+                          return (
+                            <div className="mt-2 rounded-xl bg-slate-50 border border-slate-100 p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-xs font-bold text-blue-700">解析済み・品質 {saved.quality.score}（{saved.quality.label}）</p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    体幹 {Number.isFinite(saved.summary.trunkLeanAtRelease) ? `${saved.summary.trunkLeanAtRelease.toFixed(1)}°` : 'データ不足'} ／ 投球肘 {Number.isFinite(saved.summary.throwingElbowAtRelease) ? `${saved.summary.throwingElbowAtRelease.toFixed(1)}°` : 'データ不足'}
+                                  </p>
+                                </div>
+                                <button type="button" onClick={() => setPage('analyzerResult', targetUserId, { analysisId })}
+                                  className="shrink-0 text-xs font-bold text-white bg-slate-700 rounded-lg px-3 py-2">
+                                  全データを見る
+                                </button>
+                              </div>
+                              {saved.feedback?.[0] && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{saved.feedback[0].title}：{saved.feedback[0].observation}</p>}
+                            </div>
+                          )
+                        })()}
                       </div>
                     ))}
                   </div>

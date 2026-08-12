@@ -12,7 +12,7 @@ function display(value, unit, digits = 1) {
   return Number.isFinite(value) ? `${value.toFixed(digits)}${unit}` : 'データ不足'
 }
 
-export default function AnalysisResultPanel({ result, onJumpToEvent }) {
+export default function AnalysisResultPanel({ result, onJumpToEvent = null }) {
   const chartData = result.series.map(item => ({
     time: (item.timeMs / 1000).toFixed(2),
     体幹傾き: Number.isFinite(item.trunkLean) ? Number(item.trunkLean.toFixed(1)) : null,
@@ -50,7 +50,7 @@ export default function AnalysisResultPanel({ result, onJumpToEvent }) {
           {Object.entries(EVENT_LABELS).map(([id, label]) => {
             const event = result.events[id]
             return (
-              <button key={id} type="button" disabled={!event} onClick={() => onJumpToEvent(event)}
+              <button key={id} type="button" disabled={!event || !onJumpToEvent} onClick={() => onJumpToEvent?.(event)}
                 className="min-h-14 text-left rounded-xl bg-blue-50 disabled:bg-gray-50 px-3 py-2">
                 <span className="block text-sm font-bold text-blue-800">{label}</span>
                 <span className="text-xs text-gray-500">{event ? `${(event.timeMs / 1000).toFixed(2)}秒・信頼度${Math.round(event.confidence * 100)}%` : '検出できませんでした'}</span>
