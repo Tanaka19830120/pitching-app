@@ -41,6 +41,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
   const [analysisResult, setAnalysisResult] = useState(null)
   const [saveMessage, setSaveMessage] = useState('')
   const abortRef = useRef(null)
+  const previewInitializedRef = useRef(false)
 
   useEffect(() => {
     if (!sourceVideo?.url) return undefined
@@ -91,6 +92,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
     if (videoUrl && isObjectUrl) URL.revokeObjectURL(videoUrl)
     setError('')
     setMetadata(null)
+    previewInitializedRef.current = false
     setFile(selected)
     setVideoUrl(URL.createObjectURL(selected))
     setIsObjectUrl(true)
@@ -115,8 +117,15 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
       size: file?.size ?? null,
     })
     setTrim({ start: 0, end })
-    // iOSでは0秒または動画終端が黒い空フレームになる場合がある。
-    video.currentTime = Math.min(Math.max(0.001, video.duration - (1 / 30)), 0.001)
+  }
+
+  function handleLoadedData() {
+    if (previewInitializedRef.current || !videoRef.current) return
+    previewInitializedRef.current = true
+    // 動画によっては0秒がキーフレームではなく黒く表示されるため、
+    // 設定上の開始位置は変えず、プレビューだけ少し後ろへ移動する。
+    const previewOffset = Math.min(0.25, Math.max(frameSeconds * 2, 0.08))
+    showVideoFrame(trim.start + previewOffset)
   }
 
   function seek(delta) {
@@ -136,14 +145,14 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
   function setTrimStart(value) {
     const next = Math.min(Number(value), trim.end - VIDEO_LIMITS.minTrimSeconds)
     setTrim(current => ({ ...current, start: Math.max(0, next) }))
-    showVideoFrame(next)
+    showVideoFrame(next + Math.max(frameSeconds, 0.05))
   }
 
   function setTrimEnd(value) {
     const next = Math.max(Number(value), trim.start + VIDEO_LIMITS.minTrimSeconds)
     const limited = Math.min(metadata?.duration || next, next)
     setTrim(current => ({ ...current, end: limited }))
-    showVideoFrame(limited)
+    showVideoFrame(limited - Math.max(frameSeconds, 0.05))
   }
 
   function applyCurrentTime(edge) {
@@ -400,7 +409,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
       {videoUrl && (
         <div className="bg-white rounded-2xl shadow-sm p-3 mb-4">
           <div className="relative overflow-hidden rounded-xl bg-black">
-            <video ref={videoRef} src={videoUrl} preload="auto" onLoadedMetadata={handleLoadedMetadata} onTimeUpdate={handleVideoTimeUpdate} controls playsInline className="w-full max-h-64 block" />
+            <video ref={videoRef} src={videoUrl} preload="auto" onLoadedMetadata={handleLoadedMetadata} onLoadedData={handleLoadedData} onTimeUpdate={handleVideoTimeUpdate} controls playsInline className="w-full max-h-64 block" />
             <PoseOverlay landmarks={currentPose} />
           </div>
           {metadata && (
@@ -409,6 +418,10 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
                 <button type="button" onClick={() => seek(-frameSeconds)} className="min-h-11 px-4 rounded-xl bg-gray-100 text-gray-700">−1コマ</button>
                 <button type="button" onClick={() => seek(frameSeconds)} className="min-h-11 px-4 rounded-xl bg-gray-100 text-gray-700">＋1コマ</button>
               </div>
+              <button type="button" onClick={() => showVideoFrame(trim.start + 0.25)}
+                className="block mx-auto mb-2 text-xs text-blue-600 px-3 py-2 rounded-lg bg-blue-50">
+                プレビューを再表示
+              </button>
               <p className="text-xs text-gray-500 text-center">
                 {formatTime(metadata.duration)}・{metadata.width}×{metadata.height}・推定30fps
                 {metadata.size != null ? `・${(metadata.size / 1024 / 1024).toFixed(1)}MB` : ''}
