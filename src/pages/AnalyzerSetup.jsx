@@ -123,6 +123,25 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
     video.currentTime = Math.min(trim.end, Math.max(trim.start, video.currentTime + delta))
   }
 
+  function setTrimStart(value) {
+    const next = Math.min(Number(value), trim.end - VIDEO_LIMITS.minTrimSeconds)
+    setTrim(current => ({ ...current, start: Math.max(0, next) }))
+    if (videoRef.current) videoRef.current.currentTime = Math.max(0, next)
+  }
+
+  function setTrimEnd(value) {
+    const next = Math.max(Number(value), trim.start + VIDEO_LIMITS.minTrimSeconds)
+    const limited = Math.min(metadata?.duration || next, next)
+    setTrim(current => ({ ...current, end: limited }))
+    if (videoRef.current) videoRef.current.currentTime = limited
+  }
+
+  function applyCurrentTime(edge) {
+    const currentTime = videoRef.current?.currentTime ?? 0
+    if (edge === 'start') setTrimStart(currentTime)
+    else setTrimEnd(currentTime)
+  }
+
   function next() {
     setError('')
     if (step === 0 && !metadata) {
@@ -272,22 +291,57 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
         {step === 1 && (
           <section>
             <h1 className="text-xl font-bold text-gray-800 mb-1">解析範囲を選択</h1>
-            <p className="text-sm text-gray-500 mb-4">投球1回を含む1〜12秒にしてください。</p>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-sm text-gray-600">開始（秒）
-                <input type="number" min="0" max={metadata?.duration} step="0.1" value={trim.start}
-                  onChange={event => setTrim(current => ({ ...current, start: Number(event.target.value) }))}
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-3 text-gray-800" />
+            <p className="text-sm text-gray-500 mb-4">動画を再生しながら、青い範囲に投球1回が入るよう調整してください。</p>
+
+            <div className="rounded-2xl bg-slate-50 p-4 mb-4">
+              <div className="flex justify-between items-center mb-3">
+                <div className="text-center">
+                  <p className="text-xs text-gray-500">開始</p>
+                  <p className="font-bold text-blue-700 text-lg">{formatTime(trim.start)}</p>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-sm font-bold ${trimValidation.valid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {(trim.end - trim.start).toFixed(1)}秒
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-gray-500">終了</p>
+                  <p className="font-bold text-blue-700 text-lg">{formatTime(trim.end)}</p>
+                </div>
+              </div>
+
+              <div className="relative h-3 rounded-full bg-gray-200 overflow-hidden mb-5">
+                <div className="absolute h-full bg-blue-500 rounded-full"
+                  style={{
+                    left: `${metadata?.duration ? (trim.start / metadata.duration) * 100 : 0}%`,
+                    width: `${metadata?.duration ? ((trim.end - trim.start) / metadata.duration) * 100 : 0}%`,
+                  }} />
+              </div>
+
+              <label className="block text-sm font-bold text-gray-700 mb-4">
+                <span className="flex justify-between mb-1"><span>① 開始位置</span><span>{trim.start.toFixed(2)}秒</span></span>
+                <input type="range" min="0" max={Math.max(0, (trim.end || 1) - 1)} step="0.033" value={trim.start}
+                  onChange={event => setTrimStart(event.target.value)} className="w-full h-3 accent-blue-600" />
               </label>
-              <label className="text-sm text-gray-600">終了（秒）
-                <input type="number" min="0" max={metadata?.duration} step="0.1" value={trim.end}
-                  onChange={event => setTrim(current => ({ ...current, end: Number(event.target.value) }))}
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-3 text-gray-800" />
+
+              <label className="block text-sm font-bold text-gray-700">
+                <span className="flex justify-between mb-1"><span>② 終了位置</span><span>{trim.end.toFixed(2)}秒</span></span>
+                <input type="range" min={Math.min(metadata?.duration || 1, trim.start + 1)} max={metadata?.duration || 1} step="0.033" value={trim.end}
+                  onChange={event => setTrimEnd(event.target.value)} className="w-full h-3 accent-blue-600" />
               </label>
             </div>
-            <p className={`text-sm mt-3 ${trimValidation.valid ? 'text-green-600' : 'text-amber-600'}`}>
-              選択範囲：{Math.max(0, trim.end - trim.start).toFixed(1)}秒
-            </p>
+
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button type="button" onClick={() => applyCurrentTime('start')} className="min-h-12 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-bold">現在位置を開始にする</button>
+              <button type="button" onClick={() => applyCurrentTime('end')} className="min-h-12 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-bold">現在位置を終了にする</button>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {[3, 5, 8].map(seconds => (
+                <button key={seconds} type="button" onClick={() => setTrimEnd(Math.min(metadata?.duration || seconds, trim.start + seconds))}
+                  className="shrink-0 min-h-11 px-3 rounded-xl bg-gray-100 text-gray-600 text-sm">
+                  開始から{seconds}秒
+                </button>
+              ))}
+            </div>
+            {!trimValidation.valid && <p className="text-sm mt-3 text-amber-600">{trimValidation.message}</p>}
           </section>
         )}
 
@@ -382,7 +436,13 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
               <p className="text-sm text-green-700 mt-1">
                 {poseFrames.length}フレーム中、{poseFrames.filter(frame => frame.landmarks.length > 0).length}フレームで人物を検出しました。
               </p>
-              <p className="text-xs text-green-700 mt-2">次のPhaseでイベント推定と角度グラフを追加します。</p>
+              <p className="text-xs text-green-700 mt-2">主要イベント、角度、確認ポイントを下に表示しています。</p>
+              {sourceVideo?.ownerUserId && (
+                <button type="button" onClick={() => setPage('stats', sourceVideo.ownerUserId)}
+                  className="w-full min-h-12 mt-3 rounded-xl bg-green-600 text-white font-bold">
+                  統計一覧へ戻る
+                </button>
+              )}
             </div>
           )}
           {analysisState === 'cancelled' && <p className="mt-3 text-sm text-gray-600 bg-gray-100 rounded-xl p-3">解析をキャンセルしました。設定を変えて再実行できます。</p>}
