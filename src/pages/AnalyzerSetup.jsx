@@ -115,25 +115,35 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
       size: file?.size ?? null,
     })
     setTrim({ start: 0, end })
+    // iOSでは0秒または動画終端が黒い空フレームになる場合がある。
+    video.currentTime = Math.min(Math.max(0.001, video.duration - (1 / 30)), 0.001)
   }
 
   function seek(delta) {
     const video = videoRef.current
     if (!video) return
-    video.currentTime = Math.min(trim.end, Math.max(trim.start, video.currentTime + delta))
+    showVideoFrame(video.currentTime + delta)
+  }
+
+  function showVideoFrame(timeSeconds) {
+    const video = videoRef.current
+    if (!video || !Number.isFinite(video.duration)) return
+    const lastDecodableFrame = Math.max(0.001, video.duration - frameSeconds)
+    video.pause()
+    video.currentTime = Math.min(lastDecodableFrame, Math.max(0.001, timeSeconds))
   }
 
   function setTrimStart(value) {
     const next = Math.min(Number(value), trim.end - VIDEO_LIMITS.minTrimSeconds)
     setTrim(current => ({ ...current, start: Math.max(0, next) }))
-    if (videoRef.current) videoRef.current.currentTime = Math.max(0, next)
+    showVideoFrame(next)
   }
 
   function setTrimEnd(value) {
     const next = Math.max(Number(value), trim.start + VIDEO_LIMITS.minTrimSeconds)
     const limited = Math.min(metadata?.duration || next, next)
     setTrim(current => ({ ...current, end: limited }))
-    if (videoRef.current) videoRef.current.currentTime = limited
+    showVideoFrame(limited)
   }
 
   function applyCurrentTime(edge) {
@@ -390,7 +400,7 @@ export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
       {videoUrl && (
         <div className="bg-white rounded-2xl shadow-sm p-3 mb-4">
           <div className="relative overflow-hidden rounded-xl bg-black">
-            <video ref={videoRef} src={videoUrl} crossOrigin="anonymous" onLoadedMetadata={handleLoadedMetadata} onTimeUpdate={handleVideoTimeUpdate} controls playsInline className="w-full max-h-64 block" />
+            <video ref={videoRef} src={videoUrl} preload="auto" onLoadedMetadata={handleLoadedMetadata} onTimeUpdate={handleVideoTimeUpdate} controls playsInline className="w-full max-h-64 block" />
             <PoseOverlay landmarks={currentPose} />
           </div>
           {metadata && (

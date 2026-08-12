@@ -55,12 +55,13 @@ export async function createPoseAdapter() {
     async analyzeVideo({ video, startSeconds, endSeconds, fps = 30, signal, onProgress, onFrame }) {
       const frameInterval = 1 / fps
       const totalFrames = Math.max(1, Math.floor((endSeconds - startSeconds) * fps) + 1)
+      const lastAnalyzableTime = Math.max(startSeconds, endSeconds - frameInterval)
       const frames = []
 
       for (let index = 0; index < totalFrames; index += 1) {
         if (signal?.aborted) throw new DOMException('解析をキャンセルしました。', 'AbortError')
 
-        const timeSeconds = Math.min(endSeconds, startSeconds + index * frameInterval)
+        const timeSeconds = Math.min(lastAnalyzableTime, startSeconds + index * frameInterval)
         await waitForSeek(video, timeSeconds, signal)
         const result = landmarker.detectForVideo(video, Math.round(timeSeconds * 1000))
         const frame = {
