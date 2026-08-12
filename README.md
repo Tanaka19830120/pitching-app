@@ -1,16 +1,46 @@
-# React + Vite
+# ソフトボール・ピッチング記録アプリ
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+チームで練習記録、球速、投球数、動画、統計を共有するモバイル向けWebアプリです。フォーム解析機能を段階的に追加しています。
 
-Currently, two official plugins are available:
+## ローカル起動
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+`.env.example`を参考にSupabaseの接続情報を`.env`へ設定してください。`.env`はGitへ登録しません。
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 品質確認
 
-## Expanding the ESLint configuration
+```bash
+npm run lint
+npm test
+npm run build
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## フォーム解析の方針
+
+- MediaPipe Pose Landmarkerによるブラウザ内解析
+- 動画、切り出し画像、骨格座標を外部解析サービスへ送信しない
+- 表示値は単眼動画の2D投影値
+- 実際のボール離脱ではなく「リリース推定点」を表示
+- 技術の絶対評価や医療診断は行わない
+
+詳細は[FORM_ANALYZER_INTEGRATION_PLAN.md](./FORM_ANALYZER_INTEGRATION_PLAN.md)を参照してください。
+
+## 推奨撮影条件
+
+- 1投につき3〜8秒
+- 可能なら60fps、最低30fps
+- 頭から両足まで画面内へ入れる
+- カメラを固定し、逆光や他の人物との重なりを避ける
+- 比較する動画はカメラ位置と撮影方向をそろえる
+
+## 対応ブラウザ
+
+最新版のSafari、Chrome、Edgeを対象とします。iPhoneのHEVC/MOVは端末・ブラウザによって再生できない場合があります。
+
+## プライバシー
+
+練習記録へ登録した動画はチーム共有のためSupabase Storageへ保存されます。フォーム解析処理そのものは端末内で行い、別の解析サービスへ動画を送信しません。

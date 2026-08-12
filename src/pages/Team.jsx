@@ -31,10 +31,6 @@ export default function Team({ session, setPage }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
 
-  useEffect(() => {
-    fetchRanking()
-  }, [])
-
   async function handleDeleteMember(e, memberId, memberName) {
     e.stopPropagation()
     if (!confirm(`「${memberName}」さんをチームから削除しますか？\nこの操作は取り消せません。`)) return
@@ -71,6 +67,12 @@ export default function Team({ session, setPage }) {
     buildChartData(enriched)
     setLoading(false)
   }
+
+  useEffect(() => {
+    fetchRanking()
+    // 初回表示時にだけ取得する
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function buildChartData(enriched) {
     // 全日付を収集

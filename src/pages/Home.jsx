@@ -26,11 +26,6 @@ export default function Home({ session, setPage }) {
   const [recentRecords, setRecentRecords] = useState([])
   const [teamFeed, setTeamFeed] = useState([])
 
-  useEffect(() => {
-    fetchProfile()
-    fetchTeamFeed()
-  }, [])
-
   async function fetchProfile() {
     const { data } = await supabase
       .from('profiles')
@@ -56,6 +51,13 @@ export default function Home({ session, setPage }) {
       .limit(10)
     setTeamFeed(data || [])
   }
+
+  useEffect(() => {
+    fetchProfile()
+    fetchTeamFeed()
+    // 初回表示時にだけ取得する
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const xp = profile?.total_pitches || 0
   const { current, next } = getLevelInfo(xp)
@@ -109,6 +111,13 @@ export default function Home({ session, setPage }) {
         ⚾ 今日の練習を記録する
       </button>
 
+      <button
+        onClick={() => setPage('analyzer')}
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-sm text-lg mb-4 transition-colors active:scale-95"
+      >
+        🎥 ピッチングフォームを解析する
+      </button>
+
       {/* 自分の最近の記録 */}
       {recentRecords.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
@@ -145,7 +154,7 @@ export default function Home({ session, setPage }) {
                   </div>
                   <div className="text-sm text-gray-600">
                     最速 <span className="font-bold text-green-600">{r.max_speed} km/h</span>
-                    　{r.total_pitches}球投げました
+                    {' '}{r.total_pitches}球投げました
                   </div>
                   {r.memo && <div className="text-xs text-gray-400 mt-0.5 truncate">{r.memo}</div>}
                 </div>
