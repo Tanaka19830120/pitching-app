@@ -444,12 +444,25 @@ export default function Stats({ session, targetUserId, isOwn, setPage }) {
                 return urls.length > 0 && (
                   <div className="mt-2 ml-16 space-y-2">
                     {urls.map((url, i) => (
-                      <div key={url}>
+                      <div key={url} className="rounded-xl border border-gray-100 p-2">
                         <video src={url} controls playsInline className="w-full rounded-xl max-h-52 bg-black" />
-                        <a href={url} target="_blank" rel="noreferrer"
-                          className="text-xs text-blue-500 hover:underline mt-1 block">
-                          動画{urls.length > 1 ? ` ${i + 1}` : ''} を開く / ダウンロード
-                        </a>
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          <button type="button"
+                            onClick={() => setPage('analyzerSetup', targetUserId, {
+                              url,
+                              recordId: r.id,
+                              videoIndex: i,
+                              practicedAt: r.practiced_at,
+                              ownerUserId: r.user_id,
+                            })}
+                            className="text-xs font-bold bg-blue-600 text-white rounded-lg px-3 py-2">
+                            🎥 フォームを解析
+                          </button>
+                          <a href={url} target="_blank" rel="noreferrer"
+                            className="text-xs text-blue-500 hover:underline px-2 py-2">
+                            動画{urls.length > 1 ? ` ${i + 1}` : ''}を開く
+                          </a>
+                        </div>
                       </div>
                     ))}
                   </div>

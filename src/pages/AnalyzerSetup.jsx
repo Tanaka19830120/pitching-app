@@ -17,11 +17,12 @@ function formatTime(seconds) {
   return `${minutes}:${String(Math.floor(safe % 60)).padStart(2, '0')}.${String(Math.floor((safe % 1) * 10))}`
 }
 
-export default function AnalyzerSetup({ setPage }) {
+export default function AnalyzerSetup({ setPage, sourceVideo = null }) {
   const videoRef = useRef(null)
-  const [step, setStep] = useState(0)
+  const [step, setStep] = useState(sourceVideo ? 1 : 0)
   const [file, setFile] = useState(null)
-  const [videoUrl, setVideoUrl] = useState('')
+  const [videoUrl, setVideoUrl] = useState(sourceVideo?.url || '')
+  const [isObjectUrl, setIsObjectUrl] = useState(false)
   const [metadata, setMetadata] = useState(null)
   const [trim, setTrim] = useState({ start: 0, end: 0 })
   const [crop, setCrop] = useState({ x: 0, y: 0, width: 100, height: 100 })
@@ -29,8 +30,8 @@ export default function AnalyzerSetup({ setPage }) {
   const [error, setError] = useState('')
 
   useEffect(() => () => {
-    if (videoUrl) URL.revokeObjectURL(videoUrl)
-  }, [videoUrl])
+    if (videoUrl && isObjectUrl) URL.revokeObjectURL(videoUrl)
+  }, [videoUrl, isObjectUrl])
 
   const frameSeconds = useMemo(() => 1 / (metadata?.estimatedFps || 30), [metadata])
   const trimValidation = validateTrimRange(trim.start, trim.end)
@@ -46,11 +47,12 @@ export default function AnalyzerSetup({ setPage }) {
       setError(validation.message)
       return
     }
-    if (videoUrl) URL.revokeObjectURL(videoUrl)
+    if (videoUrl && isObjectUrl) URL.revokeObjectURL(videoUrl)
     setError('')
     setMetadata(null)
     setFile(selected)
     setVideoUrl(URL.createObjectURL(selected))
+    setIsObjectUrl(true)
   }
 
   function handleLoadedMetadata(event) {
@@ -69,7 +71,7 @@ export default function AnalyzerSetup({ setPage }) {
       width: video.videoWidth,
       height: video.videoHeight,
       estimatedFps: 30,
-      size: file.size,
+      size: file?.size ?? null,
     })
     setTrim({ start: 0, end })
   }
@@ -94,7 +96,8 @@ export default function AnalyzerSetup({ setPage }) {
   }
 
   function back() {
-    if (step === 0) setPage('analyzer')
+    if (step === 0) setPage(sourceVideo ? 'stats' : 'analyzer', sourceVideo?.ownerUserId || null)
+    else if (step === 1 && sourceVideo) setPage('stats', sourceVideo.ownerUserId)
     else setStep(current => current - 1)
   }
 
@@ -110,6 +113,13 @@ export default function AnalyzerSetup({ setPage }) {
           </div>
         ))}
       </div>
+
+      {sourceVideo && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 mb-4">
+          <p className="text-sm font-bold text-blue-800">登録済み動画を解析</p>
+          <p className="text-xs text-blue-600 mt-0.5">{sourceVideo.practicedAt}・動画{sourceVideo.videoIndex + 1}</p>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
         {step === 0 && (
@@ -198,7 +208,8 @@ export default function AnalyzerSetup({ setPage }) {
                 <button type="button" onClick={() => seek(frameSeconds)} className="min-h-11 px-4 rounded-xl bg-gray-100 text-gray-700">＋1コマ</button>
               </div>
               <p className="text-xs text-gray-500 text-center">
-                {formatTime(metadata.duration)}・{metadata.width}×{metadata.height}・推定30fps・{(metadata.size / 1024 / 1024).toFixed(1)}MB
+                {formatTime(metadata.duration)}・{metadata.width}×{metadata.height}・推定30fps
+                {metadata.size != null ? `・${(metadata.size / 1024 / 1024).toFixed(1)}MB` : ''}
               </p>
             </div>
           )}

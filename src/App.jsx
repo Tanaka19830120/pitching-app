@@ -13,6 +13,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [page, setPage] = useState('home')
   const [viewingUserId, setViewingUserId] = useState(null)
+  const [analyzerSource, setAnalyzerSource] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -26,8 +27,9 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  const navigateTo = (newPage, userId = null) => {
+  const navigateTo = (newPage, userId = null, options = null) => {
     setViewingUserId(userId)
+    setAnalyzerSource(newPage === 'analyzerSetup' ? options : null)
     setPage(newPage)
   }
 
@@ -59,7 +61,7 @@ export default function App() {
       )}
       {page === 'team' && <Team session={session} setPage={navigateTo} />}
       {page === 'analyzer' && <AnalyzerHome setPage={navigateTo} />}
-      {page === 'analyzerSetup' && <AnalyzerSetup setPage={navigateTo} />}
+      {page === 'analyzerSetup' && <AnalyzerSetup setPage={navigateTo} sourceVideo={analyzerSource} />}
       <Nav page={page} setPage={navigateTo} />
     </div>
   )
