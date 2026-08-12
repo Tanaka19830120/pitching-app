@@ -85,7 +85,7 @@ export function analyzePoseFrames(poseFrames, config = {}) {
       frameIndex: frame.frameIndex,
       timeMs: frame.timeMs,
       trunkLean: trunkLeanDeg(p.hipCenter, p.shoulderCenter),
-      headOffset: p.pose && p.hipCenter ? (p.pose[L.nose].x - p.hipCenter.x) / shoulderWidthRef : null,
+      headOffset: frame.pose && p.hipCenter && validPoint(frame.pose, L.nose) ? (frame.pose[L.nose].x - p.hipCenter.x) / shoulderWidthRef : null,
       shoulderTilt: lineAngleDeg(validPoint(frame.pose, L.leftShoulder), validPoint(frame.pose, L.rightShoulder)),
       pelvisTilt: lineAngleDeg(validPoint(frame.pose, L.leftHip), validPoint(frame.pose, L.rightHip)),
       throwingElbow: jointAngleDeg(p.shoulder, p.elbow, p.wrist),
