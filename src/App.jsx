@@ -6,6 +6,7 @@ import Record from './pages/Record'
 import Stats from './pages/Stats'
 import Team from './pages/Team'
 import AnalyzerHome from './pages/AnalyzerHome'
+import AnalyzerSetup from './pages/AnalyzerSetup'
 import Nav from './components/Nav'
 
 export default function App() {
@@ -58,6 +59,7 @@ export default function App() {
       )}
       {page === 'team' && <Team session={session} setPage={navigateTo} />}
       {page === 'analyzer' && <AnalyzerHome setPage={navigateTo} />}
+      {page === 'analyzerSetup' && <AnalyzerSetup setPage={navigateTo} />}
       <Nav page={page} setPage={navigateTo} />
     </div>
   )

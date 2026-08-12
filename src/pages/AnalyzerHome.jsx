@@ -32,8 +32,8 @@ export default function AnalyzerHome({ setPage }) {
         ))}
       </div>
 
-      <button disabled className="w-full rounded-2xl bg-blue-600 text-white font-bold py-4 opacity-60">
-        動画を選んで解析（準備中）
+      <button onClick={() => setPage('analyzerSetup')} className="w-full rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold py-4 transition">
+        動画を選んで解析
       </button>
       <p className="text-xs text-gray-500 leading-5 mt-3 px-1">
         表示する角度は単眼動画による2D投影値です。実際のボール離脱ではなく「リリース推定点」を扱います。
